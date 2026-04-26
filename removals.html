@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>FBA Removals Tracker | Final Simplified</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: linear-gradient(135deg, #0a2a3a 0%, #1a4a6a 100%); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+        
+        .login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #0a2a3a 0%, #1a4a6a 100%); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .login-card { background: white; border-radius: 28px; padding: 40px; width: 400px; text-align: center; }
+        .login-card h2 { font-size: 1.8rem; color: #1a4a6a; margin-bottom: 8px; }
+        .login-input { width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 40px; margin-bottom: 16px; }
+        .login-btn { width: 100%; background: #f59e0b; padding: 12px; border: none; border-radius: 40px; font-weight: bold; cursor: pointer; color: white; }
+        
+        .main-app { display: none; }
+        .app-container { max-width: 1600px; margin: 0 auto; padding: 20px; }
+        
+        .nav-bar { background: white; border-radius: 60px; padding: 8px 24px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+        .logo { font-weight: 800; font-size: 1.3rem; color: #1a4a6a; }
+        .nav-links { display: flex; gap: 8px; }
+        .nav-btn { background: transparent; border: none; padding: 8px 20px; border-radius: 40px; font-weight: 600; cursor: pointer; }
+        .nav-btn.active { background: #f59e0b; color: white; }
+        .user-info { display: flex; align-items: center; gap: 12px; background: #f1f5f9; padding: 6px 16px; border-radius: 40px; }
+        .logout-btn { background: #ef4444; color: white; border: none; padding: 6px 14px; border-radius: 40px; cursor: pointer; }
+        
+        .upload-section { background: white; border-radius: 24px; padding: 20px; margin-bottom: 20px; }
+        .upload-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; max-height: 180px; overflow-y: auto; }
+        .upload-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 60px; padding: 8px 16px; display: inline-flex; align-items: center; gap: 12px; font-size: 0.75rem; }
+        .upload-card label { font-weight: 600; cursor: pointer; }
+        .upload-card input { display: none; }
+        .badge { background: #d1fae5; padding: 2px 8px; border-radius: 30px; font-size: 0.7rem; }
+        .badge-empty { background: #fee2e2; color: #991b1b; }
+        
+        .selection-panel { background: white; border-radius: 20px; margin-bottom: 16px; overflow: hidden; }
+        .panel-header { background: #f1f5f9; padding: 14px 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 1rem; color: #1a4a6a; }
+        .panel-header:hover { background: #e2e8f0; }
+        .panel-content { padding: 16px 20px; display: none; border-top: 1px solid #e2e8f0; }
+        .event-filter-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+        .event-checkbox { display: inline-flex; align-items: center; gap: 6px; font-size: 0.7rem; background: white; padding: 4px 12px; border-radius: 40px; border: 1px solid #cbd5e1; cursor: pointer; }
+        
+        .columns-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+        .col-checkbox { background: #f8fafc; padding: 6px 14px; border-radius: 40px; font-size: 0.75rem; cursor: pointer; border: 1px solid #e2e8f0; display: inline-flex; align-items: center; gap: 8px; }
+        .col-checkbox.selected { background: #fef3e8; border-color: #f59e0b; }
+        
+        .action-bar { background: white; border-radius: 20px; padding: 16px 20px; margin-bottom: 20px; display: flex; gap: 16px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+        .action-buttons { display: flex; gap: 12px; }
+        .btn-primary { background: #f59e0b; padding: 10px 24px; border-radius: 40px; border: none; cursor: pointer; font-weight: 600; }
+        .btn-secondary { background: #334155; color: white; padding: 10px 24px; border-radius: 40px; border: none; cursor: pointer; font-weight: 600; }
+        .btn-success { background: #10b981; color: white; padding: 10px 24px; border-radius: 40px; border: none; cursor: pointer; font-weight: 600; }
+        
+        .search-bar { background: white; border-radius: 20px; padding: 16px 20px; margin-bottom: 20px; display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+        .search-input { flex: 2; padding: 10px 16px; border-radius: 40px; border: 1.5px solid #e2e8f0; min-width: 200px; }
+        
+        .file-input-area { background: #f1f5f9; border-radius: 20px; padding: 20px; margin-bottom: 20px; border: 2px dashed #cbd5e1; text-align: center; cursor: pointer; }
+        .file-input-area:hover { background: #e2e8f0; }
+        
+        .results-area { background: white; border-radius: 24px; padding: 20px; margin-top: 20px; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.7rem; }
+        th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+        th { background: #f1f5f9; font-weight: 700; position: sticky; top: 0; cursor: pointer; white-space: nowrap; }
+        .filter-input { width: 100%; padding: 4px 6px; border-radius: 20px; border: 1px solid #cbd5e1; font-size: 0.65rem; margin-top: 4px; }
+        
+        .admin-panel { background: #fef3c7; border-radius: 24px; padding: 20px; margin-top: 20px; }
+        .user-row { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #e2e8f0; }
+        
+        .data-status { background: #e0e7ff; border-radius: 16px; padding: 12px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+        .status-active { background: #10b981; color: white; padding: 4px 12px; border-radius: 40px; font-size: 0.7rem; font-weight: 600; display: inline-block; }
+        .status-inactive { background: #64748b; color: white; padding: 4px 12px; border-radius: 40px; font-size: 0.7rem; font-weight: 600; display: inline-block; }
+        
+        @media (max-width: 768px) { .columns-grid { flex-direction: column; } }
+    </style>
+</head>
+<body>
+<div id="loginOverlay" class="login-overlay">
+    <div class="login-card">
+        <h2>🔐 FBA Removals Tracker</h2>
+        <div class="sub">Final Simplified - Match by FNSKU + MSKU only</div>
+        <input type="text" id="loginEmail" class="login-input" placeholder="Username" value="AP">
+        <input type="password" id="loginPassword" class="login-input" placeholder="Password" type="password">
+        <button class="login-btn" onclick="attemptLogin()">Sign In →</button>
+    </div>
+</div>
+
+<div id="mainApp" class="main-app">
+    <div class="app-container">
+        <div class="nav-bar">
+            <div class="logo">📦 FBA Removals Tracker</div>
+            <div class="nav-links">
+                <button class="nav-btn active" data-view="tracker">📋 Removals Tracker</button>
+                <button id="adminBtn" class="nav-btn" style="display:none;">👑 Admin</button>
+            </div>
+            <div class="user-info">
+                <span>👤 <span id="currentUserName">Admin</span></span>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+        </div>
+
+        <!-- Upload Section -->
+        <div id="uploadSection" class="upload-section" style="display:none;">
+            <div style="font-weight:600; margin-bottom:12px;">📂 Upload Removals Reports</div>
+            <div class="upload-grid" id="uploadGrid"></div>
+        </div>
+
+        <!-- Report CSV Upload -->
+        <div id="reportUploadArea" class="file-input-area" onclick="document.getElementById('reportCsvInput').click()">
+            📄 Click to upload Report CSV (from Report Builder)
+            <input type="file" id="reportCsvInput" accept=".csv" style="display:none">
+        </div>
+
+        <div id="dataStatus" class="data-status" style="display:none;">
+            <span>📊 Report Data: <strong id="reportCount">0</strong> rows</span>
+            <span>📦 Inventory: <strong id="inventoryCount">0</strong> | Removal Orders: <strong id="orderCount">0</strong> | Shipments: <strong id="shipmentCount">0</strong></span>
+            <span id="dataBadge" class="status-inactive">Waiting for data</span>
+        </div>
+
+        <div id="trackerView">
+            <!-- Event Type Filter Panel -->
+            <div class="selection-panel">
+                <div class="panel-header" onclick="togglePanel(this)">🏷️ FILTER INVENTORY EVENTS BY TYPE</div>
+                <div class="panel-content" id="eventFilterPanel"></div>
+            </div>
+
+            <div class="search-bar">
+                <input type="text" id="globalSearch" class="search-input" placeholder="🔍 Search across all data...">
+                <button id="updateFilterBtn" class="btn-primary">🔄 Update Report</button>
+                <button id="exportCsvBtn" class="btn-success">📎 Export CSV</button>
+            </div>
+
+            <div id="selectionPanels"></div>
+
+            <div id="resultsArea" class="results-area">
+                <div style="color:#666; text-align:center; padding:40px;">1. Upload Report CSV (from Report Builder)<br>2. Upload Inventory Ledger, Removal Order, Removal Shipment<br>3. Select event types to show<br>4. Click "Update Report"</div>
+            </div>
+        </div>
+
+        <div id="adminView" style="display:none;"></div>
+    </div>
+</div>
+
+<script>
+    // ========== USER MANAGEMENT ==========
+    let currentUser = null;
+    let isAdmin = false;
+    let users = [{ id: 1, email: 'AP', password: 'pandrei', name: 'Admin', role: 'admin' }];
+    
+    function saveUsers() { localStorage.setItem('removals_users', JSON.stringify(users)); }
+    function loadUsers() { const s = localStorage.getItem('removals_users'); if(s) users = JSON.parse(s); }
+    loadUsers();
+
+    function attemptLogin() {
+        const email = document.getElementById('loginEmail').value;
+        const pwd = document.getElementById('loginPassword').value;
+        const user = users.find(u => u.email === email && u.password === pwd);
+        if(user) {
+            currentUser = user;
+            isAdmin = user.role === 'admin';
+            document.getElementById('loginOverlay').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'block';
+            document.getElementById('currentUserName').innerText = user.name;
+            if(isAdmin) {
+                document.getElementById('adminBtn').style.display = 'inline-block';
+                document.getElementById('uploadSection').style.display = 'block';
+            } else {
+                document.getElementById('adminBtn').style.display = 'none';
+                document.getElementById('uploadSection').style.display = 'none';
+            }
+            initApp();
+        } else {
+            alert('Invalid credentials');
+        }
+    }
+    function logout() { document.getElementById('loginOverlay').style.display = 'flex'; document.getElementById('mainApp').style.display = 'none'; }
+
+    // ========== INDEXEDDB ==========
+    const DB_NAME = 'FBARemovalsDB';
+    const DB_VERSION = 11;
+    let db = null;
+
+    const REMOVALS_REPORTS = [
+        { id: "inventoryLedger", name: "Inventory Ledger", storeName: "inventoryLedger", headers: ["Date","FNSKU","ASIN","MSKU","Title","Event Type","Reference ID","Quantity","Fulfillment Center","Disposition","Reason","Country","Reconciled Quantity","Unreconciled Quantity","Date and Time"] },
+        { id: "removalOrder", name: "Removal Order Detail", storeName: "removalOrder", headers: ["request-date","order-id","order-source","order-type","service-speed","order-status","last-updated-date","sku","fnsku","disposition","requested-quantity","cancelled-quantity","disposed-quantity","shipped-quantity","in-process-quantity","removal-fee","currency"] },
+        { id: "removalShipment", name: "Removal Shipment Detail", storeName: "removalShipment", headers: ["request-date","order-id","shipment-date","sku","fnsku","disposition","shipped-quantity","carrier","tracking-number","removal-order-type"] }
+    ];
+
+    let datasets = { inventoryLedger: [], removalOrder: [], removalShipment: [] };
+    let reportData = [];
+    let selectedEventTypes = ["Adjustments", "VendorReturns", "CustomerReturns", "Receipts", "Shipments", "Whsetransfers"];
+    
+    let selectedColumns = {};
+    let currentData = [];
+    let currentColumns = [];
+    let columnFilters = {};
+    let sortColumn = null;
+    let sortDirection = 'asc';
+
+    function formatDate(dateStr) {
+        if(!dateStr) return '-';
+        try { 
+            let d = new Date(dateStr); 
+            if(isNaN(d.getTime())) return '-'; 
+            return `${d.getDate().toString().padStart(2,'0')}-${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getFullYear().toString().slice(-2)}`; 
+        } catch(e) { return '-'; }
+    }
+
+    function getCleanReturnDate(returnDateStr) {
+        if(!returnDateStr || returnDateStr === '-') return null;
+        // Remove (RR) suffix if present
+        let clean = returnDateStr.replace(/\s*\(RR\)/i, '').trim();
+        const parts = clean.split('-');
+        if(parts.length === 3) {
+            const isoDate = `20${parts[2]}-${parts[1]}-${parts[0]}`;
+            const date = new Date(isoDate);
+            if(!isNaN(date.getTime())) return date;
+        }
+        return null;
+    }
+
+    function findClosestDate(targetDate, dateArray) {
+        if(!targetDate || dateArray.length === 0) return null;
+        
+        let closest = null;
+        let closestDiff = Infinity;
+        
+        for(const date of dateArray) {
+            const diff = Math.abs(date - targetDate);
+            if(diff < closestDiff) {
+                closestDiff = diff;
+                closest = date;
+            }
+        }
+        return closest;
+    }
+
+    function normalizeMerchantSku(sku) {
+        if(!sku) return '';
+        const match = sku.match(/amzn\.gr\.([A-Z0-9]+)/i);
+        if(match) return match[1];
+        const match2 = sku.match(/amzn\.gr\.([A-Z0-9]+)-/i);
+        if(match2) return match2[1];
+        return sku;
+    }
+
+    function initIndexedDB() {
+        return new Promise((resolve, reject) => {
+            const r = indexedDB.open(DB_NAME, DB_VERSION);
+            r.onerror = () => reject(r.error);
+            r.onsuccess = () => { db = r.result; loadAllData().then(resolve); };
+            r.onupgradeneeded = (e) => {
+                const db_ = e.target.result;
+                REMOVALS_REPORTS.forEach(rpt => { if (!db_.objectStoreNames.contains(rpt.storeName)) db_.createObjectStore(rpt.storeName); });
+            };
+        });
+    }
+
+    async function saveToDB(storeName, data) {
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction([storeName], 'readwrite');
+            tx.objectStore(storeName).put(data, 'data');
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+        });
+    }
+
+    async function loadFromDB(storeName) {
+        return new Promise((resolve) => {
+            const tx = db.transaction([storeName], 'readonly');
+            const req = tx.objectStore(storeName).get('data');
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => resolve([]);
+        });
+    }
+
+    async function loadAllData() {
+        for(const r of REMOVALS_REPORTS) {
+            datasets[r.id] = await loadFromDB(r.storeName);
+            updateBadge(r.id, datasets[r.id].length);
+        }
+        updateDataStatus();
+    }
+
+    function updateDataStatus() {
+        const statusDiv = document.getElementById('dataStatus');
+        const reportCountSpan = document.getElementById('reportCount');
+        const inventoryCount = document.getElementById('inventoryCount');
+        const orderCount = document.getElementById('orderCount');
+        const shipmentCount = document.getElementById('shipmentCount');
+        const badge = document.getElementById('dataBadge');
+        
+        const repLen = reportData.length;
+        const invLen = datasets.inventoryLedger?.length || 0;
+        const ordLen = datasets.removalOrder?.length || 0;
+        const shpLen = datasets.removalShipment?.length || 0;
+        
+        if(reportCountSpan) reportCountSpan.innerText = repLen.toLocaleString();
+        if(inventoryCount) inventoryCount.innerText = invLen.toLocaleString();
+        if(orderCount) orderCount.innerText = ordLen.toLocaleString();
+        if(shipmentCount) shipmentCount.innerText = shpLen.toLocaleString();
+        
+        if(repLen > 0 && (invLen > 0 || ordLen > 0 || shpLen > 0)) {
+            statusDiv.style.display = 'flex';
+            if(badge) { badge.innerText = '✅ Data Ready'; badge.className = 'status-active'; }
+        } else if(repLen > 0) {
+            statusDiv.style.display = 'flex';
+            if(badge) { badge.innerText = '⚠️ Upload Removals Reports'; badge.className = 'status-inactive'; }
+        } else if(invLen > 0 || ordLen > 0 || shpLen > 0) {
+            statusDiv.style.display = 'flex';
+            if(badge) { badge.innerText = '⚠️ Upload Report CSV'; badge.className = 'status-inactive'; }
+        } else {
+            statusDiv.style.display = 'none';
+        }
+    }
+
+    function updateBadge(id, count) {
+        const b = document.getElementById(`badge-${id}`);
+        if(b) {
+            b.innerText = count > 0 ? `✅ ${count.toLocaleString()}` : '📁 Upload';
+            b.className = count > 0 ? "badge" : "badge badge-empty";
+        }
+    }
+
+    function parseCSV(text) {
+        const lines = []; let cur = "", inQ = false;
+        for(let i=0;i<text.length;i++) { cur += text[i]; if(text[i] === '"') inQ = !inQ; if(text[i] === '\n' && !inQ) { if(cur.trim()) lines.push(cur.trim()); cur = ""; } }
+        if(cur.trim()) lines.push(cur.trim());
+        if(lines.length<2) return [];
+        const parseLine = (l) => {
+            let res=[], curr="", q=false;
+            for(let i=0;i<l.length;i++) {
+                let c=l[i];
+                if(c==='"') { if(q && l[i+1]==='"') { curr+='"'; i++; } else q=!q; }
+                else if(c===',' && !q) { res.push(curr.trim()); curr=""; }
+                else curr+=c;
+            }
+            res.push(curr.trim());
+            return res.map(v=>v.replace(/^"|"$/g,''));
+        };
+        const headers = parseLine(lines[0]);
+        const result = [];
+        for(let i=1;i<lines.length;i++) {
+            const vals = parseLine(lines[i]);
+            if(vals.length < 2) continue;
+            let obj = {};
+            headers.forEach((h,idx) => { obj[h] = vals[idx] || ""; });
+            result.push(obj);
+        }
+        return result;
+    }
+
+    function handleReportUpload(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const parsed = parseCSV(e.target.result);
+            if(parsed.length) {
+                reportData = parsed;
+                updateDataStatus();
+                alert(`Loaded ${parsed.length.toLocaleString()} rows from Report Builder`);
+                generateReport();
+            } else alert("Parse failed");
+        };
+        reader.readAsText(file);
+    }
+
+    async function handleRemovalsUpload(reportId, file) {
+        if(!isAdmin) { alert("Admin only"); return; }
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const parsed = parseCSV(e.target.result);
+            if(parsed.length) {
+                await saveToDB(REMOVALS_REPORTS.find(r=>r.id===reportId).storeName, parsed);
+                datasets[reportId] = parsed;
+                updateBadge(reportId, parsed.length);
+                updateDataStatus();
+                alert(`Loaded ${parsed.length.toLocaleString()} rows`);
+                generateReport();
+            } else alert("Parse failed");
+        };
+        reader.readAsText(file);
+    }
+
+    function buildUploadUI() {
+        const c = document.getElementById('uploadGrid');
+        c.innerHTML = '';
+        REMOVALS_REPORTS.forEach(r => {
+            const card = document.createElement('div');
+            card.className = 'upload-card';
+            card.innerHTML = `<label for="up-${r.id}">📄 ${r.name}</label><input type="file" accept=".csv" id="up-${r.id}"><span id="badge-${r.id}" class="badge badge-empty">📁</span>`;
+            c.appendChild(card);
+            const inp = card.querySelector('input');
+            inp.addEventListener('change', (e) => { if(e.target.files.length) handleRemovalsUpload(r.id, e.target.files[0]); });
+        });
+        
+        document.getElementById('reportCsvInput').addEventListener('change', (e) => { if(e.target.files.length) handleReportUpload(e.target.files[0]); });
+    }
+
+    function buildEventFilterPanel() {
+        const allEventTypes = ["Adjustments", "VendorReturns", "CustomerReturns", "Receipts", "Shipments", "Whsetransfers"];
+        const container = document.getElementById('eventFilterPanel');
+        container.innerHTML = `<div class="event-filter-grid">${allEventTypes.map(type => `<label class="event-checkbox"><input type="checkbox" value="${type}" class="event-type-filter" ${selectedEventTypes.includes(type) ? 'checked' : ''}> ${type}</label>`).join('')}</div>`;
+        
+        document.querySelectorAll('.event-type-filter').forEach(cb => {
+            cb.addEventListener('change', () => {
+                selectedEventTypes = Array.from(document.querySelectorAll('.event-type-filter:checked')).map(c => c.value);
+                generateReport();
+            });
+        });
+    }
+
+    function generateMergedReport() {
+        const searchTerm = document.getElementById('globalSearch')?.value.toLowerCase() || '';
+        if(reportData.length === 0) return [];
+        
+        const inventoryData = datasets.inventoryLedger || [];
+        const removalOrderData = datasets.removalOrder || [];
+        const removalShipmentData = datasets.removalShipment || [];
+        
+        const results = [];
+        const MAX_EVENTS = 5;
+        
+        for(const baseRow of reportData) {
+            const returnDateDisplay = baseRow['Return Date'] || '-';
+            const asin = baseRow['ASIN'] || '';
+            const gradeChangedFnsku = baseRow['Grade Changed FNSKU'] || '';
+            const merchantSku = baseRow['Merchant SKU'] || '';
+            const originalFnsku = baseRow['FNSKU'] || '';
+            const detailedDisposition = baseRow['Detailed Disposition'] || '';
+            const orderId = baseRow['Order ID'] || '';
+            
+            // Get clean return date for comparison
+            const returnDateObj = getCleanReturnDate(returnDateDisplay);
+            
+            // ========== 1. MATCH INVENTORY LEDGER ==========
+            // Match by: Grade Changed FNSKU + Merchant SKU
+            // Date: find closest date to Return Date
+            let inventoryEntries = [];
+            
+            if(gradeChangedFnsku && gradeChangedFnsku !== '-' && merchantSku) {
+                // First, find all inventory entries that match by FNSKU and MSKU
+                const matchingInventory = inventoryData.filter(inv => {
+                    const invFnsku = inv['FNSKU']?.toString().trim() || '';
+                    const invMsku = inv['MSKU']?.toString().trim() || '';
+                    
+                    const fnskuMatch = invFnsku === gradeChangedFnsku;
+                    const normalizedInvMsku = normalizeMerchantSku(invMsku);
+                    const normalizedReportMsku = normalizeMerchantSku(merchantSku);
+                    const mskuMatch = invMsku === merchantSku || normalizedInvMsku === normalizedReportMsku;
+                    
+                    return fnskuMatch && mskuMatch;
+                });
+                
+                // If we have matching entries, find the closest date to Return Date
+                if(matchingInventory.length > 0 && returnDateObj) {
+                    // Calculate distance for each entry
+                    const entriesWithDistance = matchingInventory.map(inv => {
+                        const invDate = new Date(inv['Date'] || inv['Date and Time'] || 0);
+                        const distance = Math.abs(invDate - returnDateObj);
+                        return { inv, invDate, distance };
+                    });
+                    
+                    // Sort by distance (closest first)
+                    entriesWithDistance.sort((a, b) => a.distance - b.distance);
+                    
+                    // Take closest entry
+                    const closestEntry = entriesWithDistance[0];
+                    inventoryEntries = [closestEntry.inv];
+                    
+                    // Also include any other entries with the same date (multiple events same day)
+                    const sameDateEntries = matchingInventory.filter(inv => {
+                        const invDate = new Date(inv['Date'] || inv['Date and Time'] || 0);
+                        return invDate.toDateString() === closestEntry.invDate.toDateString();
+                    });
+                    inventoryEntries = sameDateEntries;
+                } else if(matchingInventory.length > 0) {
+                    // No return date to compare, take all matching
+                    inventoryEntries = matchingInventory;
+                }
+            }
+            
+            // Filter by selected event types
+            inventoryEntries = inventoryEntries.filter(inv => selectedEventTypes.includes(inv['Event Type']));
+            
+            // Sort by date
+            inventoryEntries.sort((a, b) => {
+                const dateA = new Date(a['Date'] || a['Date and Time'] || 0);
+                const dateB = new Date(b['Date'] || b['Date and Time'] || 0);
+                return dateA - dateB;
+            });
+            
+            // Create base row data
+            const row = {
+                'Return Date': returnDateDisplay,
+                'Order ID': orderId || '-',
+                'ASIN': asin || '-',
+                'FNSKU': originalFnsku || '-',
+                'Grade Changed FNSKU': gradeChangedFnsku || '-',
+                'Merchant SKU': merchantSku || '-',
+                'Detailed Disposition': detailedDisposition || '-'
+            };
+            
+            // Add inventory event columns
+            for(let i = 0; i < MAX_EVENTS; i++) {
+                const event = inventoryEntries[i];
+                if(event) {
+                    const qty = parseFloat(event['Quantity'] || '0');
+                    const qtyDisplay = qty > 0 ? `+${event['Quantity']}` : event['Quantity'];
+                    row[`Event Type ${i+1}`] = event['Event Type'] || '-';
+                    row[`Quantity ${i+1}`] = qtyDisplay;
+                    row[`Event Date ${i+1}`] = formatDate(event['Date'] || event['Date and Time']);
+                    row[`Reference ID ${i+1}`] = event['Reference ID'] || '-';
+                } else {
+                    row[`Event Type ${i+1}`] = '-';
+                    row[`Quantity ${i+1}`] = '-';
+                    row[`Event Date ${i+1}`] = '-';
+                    row[`Reference ID ${i+1}`] = '-';
+                }
+            }
+            
+            // ========== 2. MATCH REMOVAL ORDER DETAIL ==========
+            // Match by: Grade Changed FNSKU (to fnsku) + Merchant SKU (to sku)
+            let removalMatch = null;
+            
+            if(gradeChangedFnsku && gradeChangedFnsku !== '-' && merchantSku) {
+                const matchingOrders = removalOrderData.filter(ro => {
+                    const roFnsku = ro['fnsku']?.toString().trim() || '';
+                    const roSku = ro['sku']?.toString().trim() || '';
+                    
+                    const fnskuMatch = roFnsku === gradeChangedFnsku;
+                    const normalizedSku = normalizeMerchantSku(roSku);
+                    const normalizedReportMsku = normalizeMerchantSku(merchantSku);
+                    const skuMatch = roSku === merchantSku || normalizedSku === normalizedReportMsku;
+                    
+                    return fnskuMatch && skuMatch;
+                });
+                
+                if(matchingOrders.length > 0) {
+                    removalMatch = matchingOrders[0];
+                }
+            }
+            
+            if(removalMatch) {
+                row['Removal Order ID'] = removalMatch['order-id'] || '-';
+                row['Order Status'] = removalMatch['order-status'] || '-';
+                row['Removal Last Updated'] = formatDate(removalMatch['last-updated-date']);
+                row['Requested Qty'] = removalMatch['requested-quantity'] || '-';
+                row['Cancelled Qty'] = removalMatch['cancelled-quantity'] || '-';
+                row['Disposed Qty'] = removalMatch['disposed-quantity'] || '-';
+                row['Shipped Qty'] = removalMatch['shipped-quantity'] || '-';
+                row['In Process Qty'] = removalMatch['in-process-quantity'] || '-';
+                
+                // ========== 3. MATCH REMOVAL SHIPMENT DETAIL ==========
+                const removalOrderId = removalMatch['order-id']?.toString().trim();
+                const removalFnsku = removalMatch['fnsku']?.toString().trim();
+                const removalSku = removalMatch['sku']?.toString().trim();
+                
+                const matchingShipments = removalShipmentData.filter(rs => {
+                    const rsOrderId = rs['order-id']?.toString().trim();
+                    const rsFnsku = rs['fnsku']?.toString().trim();
+                    const rsSku = rs['sku']?.toString().trim();
+                    
+                    const orderIdMatch = rsOrderId === removalOrderId;
+                    const fnskuMatch = rsFnsku === gradeChangedFnsku || rsFnsku === removalFnsku;
+                    const normalizedRsSku = normalizeMerchantSku(rsSku);
+                    const normalizedReportMsku = normalizeMerchantSku(merchantSku);
+                    const skuMatch = rsSku === merchantSku || rsSku === removalSku || normalizedRsSku === normalizedReportMsku;
+                    
+                    return orderIdMatch && fnskuMatch && skuMatch;
+                });
+                
+                if(matchingShipments.length > 0) {
+                    const shipment = matchingShipments[matchingShipments.length - 1];
+                    row['Shipment Date'] = formatDate(shipment['shipment-date']);
+                    row['Carrier'] = shipment['carrier'] || '-';
+                    row['Tracking Number'] = shipment['tracking-number'] || '-';
+                } else {
+                    row['Shipment Date'] = '-';
+                    row['Carrier'] = '-';
+                    row['Tracking Number'] = '-';
+                }
+            } else {
+                row['Removal Order ID'] = '-';
+                row['Order Status'] = '-';
+                row['Removal Last Updated'] = '-';
+                row['Requested Qty'] = '-';
+                row['Cancelled Qty'] = '-';
+                row['Disposed Qty'] = '-';
+                row['Shipped Qty'] = '-';
+                row['In Process Qty'] = '-';
+                row['Shipment Date'] = '-';
+                row['Carrier'] = '-';
+                row['Tracking Number'] = '-';
+            }
+            
+            if(searchTerm && !Object.values(row).some(v => v && v.toString().toLowerCase().includes(searchTerm))) continue;
+            results.push(row);
+        }
+        
+        return results;
+    }
+
+    function renderReport() {
+        const data = generateMergedReport();
+        if(!data || data.length === 0) {
+            document.getElementById('resultsArea').innerHTML = '<div class="results-area" style="text-align:center; padding:40px;">⚠️ No results. Upload Report CSV and Removals reports first.</div>';
+            return;
+        }
+        
+        currentData = data;
+        currentColumns = Object.keys(data[0]);
+        columnFilters = {};
+        
+        let html = `<div style="margin-bottom:16px;"><strong>📊 ${data.length} Order IDs tracked</strong></div><div style="overflow-x:auto;"><table id="reportTable"><thead><tr>`;
+        for(const col of currentColumns) {
+            html += `<th onclick="sortByColumn('${col.replace(/'/g,"\\'")}')">${col}<span style="font-size:0.6rem;">${sortColumn === col ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</span><input type="text" class="filter-input" data-col="${col.replace(/'/g,"\\'")}" placeholder="Filter..." oninput="filterColumn('${col.replace(/'/g,"\\'")}', this.value)"></th>`;
+        }
+        html += `</thead><tbody id="tableBody"></tbody></table></div>`;
+        document.getElementById('resultsArea').innerHTML = html;
+        renderTableBody();
+    }
+    
+    function renderTableBody() {
+        let filteredData = [...currentData];
+        for(const [col, filterVal] of Object.entries(columnFilters)) if(filterVal) filteredData = filteredData.filter(row => (row[col]?.toString().toLowerCase() || '').includes(filterVal.toLowerCase()));
+        if(sortColumn) filteredData.sort((a,b) => { let aVal = a[sortColumn] || '', bVal = b[sortColumn] || ''; return sortDirection === 'asc' ? aVal.toString().localeCompare(bVal.toString()) : -aVal.toString().localeCompare(bVal.toString()); });
+        const tbody = document.getElementById('tableBody');
+        if(!tbody) return;
+        tbody.innerHTML = '';
+        for(const row of filteredData.slice(0, 5000)) {
+            let tr = '<tr>';
+            for(const col of currentColumns) {
+                tr += `<td>${row[col] || '-'}</td>`;
+            }
+            tr += '</tr>';
+            tbody.innerHTML += tr;
+        }
+    }
+    
+    function sortByColumn(col) { if(sortColumn === col) sortDirection = sortDirection === 'asc' ? 'desc' : 'asc'; else { sortColumn = col; sortDirection = 'asc'; } renderTableBody(); }
+    function filterColumn(col, value) { columnFilters[col] = value; renderTableBody(); }
+    
+    function exportToCSV() {
+        if(!currentData.length) { alert("Generate report first"); return; }
+        let filteredData = [...currentData];
+        for(const [col, filterVal] of Object.entries(columnFilters)) if(filterVal) filteredData = filteredData.filter(row => (row[col]?.toString().toLowerCase() || '').includes(filterVal.toLowerCase()));
+        const headers = currentColumns;
+        const rows = filteredData.map(row => headers.map(h => `"${String(row[h] || '-').replace(/"/g, '""')}"`).join(','));
+        const csv = [headers.join(','), ...rows].join('\n');
+        const blob = new Blob([csv], {type: 'text/csv'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `removals_tracking_${new Date().toISOString().slice(0,19)}.csv`;
+        a.click();
+    }
+
+    function buildSelectionPanels() {
+        const container = document.getElementById('selectionPanels');
+        const columnGroups = [
+            { name: 'Base Info', columns: ['Return Date', 'Order ID', 'ASIN', 'FNSKU', 'Grade Changed FNSKU', 'Merchant SKU', 'Detailed Disposition'] },
+            { name: 'Inventory Events', columns: ['Event Type', 'Quantity', 'Event Date', 'Reference ID'] },
+            { name: 'Removal Order', columns: ['Removal Order ID', 'Order Status', 'Removal Last Updated', 'Requested Qty', 'Cancelled Qty', 'Disposed Qty', 'Shipped Qty', 'In Process Qty'] },
+            { name: 'Removal Shipment', columns: ['Shipment Date', 'Carrier', 'Tracking Number'] }
+        ];
+        
+        let columnsHtml = `<div class="selection-panel"><div class="panel-header" onclick="togglePanel(this)">📋 SELECT COLUMN GROUPS</div><div class="panel-content">
+            <div class="columns-grid">`;
+        
+        columnGroups.forEach(group => {
+            columnsHtml += `<label class="col-checkbox selected" data-group="${group.name}">
+                <input type="checkbox" class="group-select" data-group="${group.name}" checked onchange="toggleColumnGroup('${group.name}', this.checked)">
+                <span>${group.name}</span>
+            </label>`;
+        });
+        
+        columnsHtml += `</div></div></div>`;
+        container.innerHTML = columnsHtml;
+    }
+    
+    function toggleColumnGroup(groupName, isChecked) {
+        const groupColumns = {
+            'Base Info': ['Return Date', 'Order ID', 'ASIN', 'FNSKU', 'Grade Changed FNSKU', 'Merchant SKU', 'Detailed Disposition'],
+            'Inventory Events': ['Event Type', 'Quantity', 'Event Date', 'Reference ID'],
+            'Removal Order': ['Removal Order ID', 'Order Status', 'Removal Last Updated', 'Requested Qty', 'Cancelled Qty', 'Disposed Qty', 'Shipped Qty', 'In Process Qty'],
+            'Removal Shipment': ['Shipment Date', 'Carrier', 'Tracking Number']
+        };
+        
+        const cols = groupColumns[groupName] || [];
+        for(let i = 1; i <= 5; i++) {
+            for(const baseCol of cols) {
+                const fullCol = baseCol === 'Event Type' ? `${baseCol} ${i}` : 
+                               (baseCol === 'Quantity' ? `${baseCol} ${i}` :
+                               (baseCol === 'Event Date' ? `${baseCol} ${i}` :
+                               (baseCol === 'Reference ID' ? `${baseCol} ${i}` : baseCol)));
+                selectedColumns[fullCol] = isChecked;
+            }
+        }
+        
+        const label = document.querySelector(`.col-checkbox[data-group="${groupName}"]`);
+        if(label) {
+            if(isChecked) label.classList.add('selected');
+            else label.classList.remove('selected');
+        }
+        generateReport();
+    }
+    
+    function togglePanel(header) { const c = header.nextElementSibling; if(c) c.style.display = c.style.display === 'none' ? 'block' : 'none'; }
+    function generateReport() { renderReport(); }
+    
+    function renderAdminPanel() {
+        let usersHtml = users.map(u => `<div class="user-row"><span><strong>${u.email}</strong> (${u.role})</span><div>${u.id === 1 ? '<span style="color:#666;">Cannot delete</span>' : `<button onclick="deleteUser(${u.id})">Delete</button>`}</div></div>`).join('');
+        return `<div class="admin-panel"><h3>👑 Admin Panel</h3><div><input type="text" id="newUserEmail" placeholder="Username"><input type="password" id="newUserPassword" placeholder="Password"><select id="newUserRole"><option value="user">User</option><option value="admin">Admin</option></select><button onclick="addUser()">Add User</button></div><div id="usersList">${usersHtml}</div><hr><h4>🔌 SP-API Credentials</h4><div><input type="text" id="apiClientId" placeholder="Client ID"><input type="text" id="apiClientSecret" placeholder="Client Secret"><input type="text" id="apiRefreshToken" placeholder="Refresh Token"><input type="text" id="apiMarketplaceId" placeholder="Marketplace ID"><button onclick="saveApiCreds()">Save</button></div></div>`;
+    }
+    
+    function addUser() {
+        const email = document.getElementById('newUserEmail')?.value, pwd = document.getElementById('newUserPassword')?.value, role = document.getElementById('newUserRole')?.value;
+        if(!email || !pwd) { alert("Email and password required"); return; }
+        if(users.find(u=>u.email===email)) { alert("User exists"); return; }
+        users.push({ id: Date.now(), email, password: pwd, name: email.split('@')[0], role });
+        saveUsers();
+        if(isAdmin) document.getElementById('adminView').innerHTML = renderAdminPanel();
+        alert(`User ${email} added`);
+    }
+    window.deleteUser = function(id) { if(id === 1) { alert("Cannot delete main admin"); return; } users = users.filter(u=>u.id!==id); saveUsers(); if(isAdmin) document.getElementById('adminView').innerHTML = renderAdminPanel(); alert("User deleted"); };
+    function saveApiCreds() { const creds = { clientId: document.getElementById('apiClientId')?.value, clientSecret: document.getElementById('apiClientSecret')?.value, refreshToken: document.getElementById('apiRefreshToken')?.value, marketplaceId: document.getElementById('apiMarketplaceId')?.value }; localStorage.setItem('removals_api', JSON.stringify(creds)); alert("Credentials saved"); }
+    
+    function switchView(view) {
+        document.getElementById('trackerView').style.display = view === 'tracker' ? 'block' : 'none';
+        document.getElementById('adminView').style.display = view === 'admin' ? 'block' : 'none';
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        if(view === 'tracker') document.querySelector('[data-view="tracker"]').classList.add('active');
+        else if(view === 'admin') document.getElementById('adminBtn').classList.add('active');
+        if(view === 'admin' && isAdmin) document.getElementById('adminView').innerHTML = renderAdminPanel();
+    }
+    
+    async function initApp() {
+        buildUploadUI(); 
+        buildEventFilterPanel();
+        await initIndexedDB();
+        
+        document.getElementById('updateFilterBtn').onclick = generateReport;
+        document.getElementById('exportCsvBtn').onclick = exportToCSV;
+        document.getElementById('adminBtn').onclick = () => switchView('admin');
+        document.querySelector('[data-view="tracker"]').onclick = () => switchView('tracker');
+        
+        setTimeout(() => {
+            buildSelectionPanels();
+        }, 100);
+        
+        const firstPanel = document.querySelector('.selection-panel .panel-header'); 
+        if(firstPanel) togglePanel(firstPanel);
+    }
+    
+    window.sortByColumn = sortByColumn; 
+    window.filterColumn = filterColumn; 
+    window.togglePanel = togglePanel; 
+    window.toggleColumnGroup = toggleColumnGroup;
+    window.generateReport = generateReport;
+</script>
+</body>
+</html>
