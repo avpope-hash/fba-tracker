@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>FBA Tracker | Complete with Delete & Full Removals Matching</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .login-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .login-card {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 32px;
+            padding: 48px 40px;
+            width: 420px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .login-card h2 {
+            font-size: 2rem;
+            background: linear-gradient(135deg, #f59e0b, #ef4444);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+        .login-card .sub { color: #94a3b8; margin-bottom: 24px; font-size: 0.85rem; }
+        .login-input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid #334155;
+            background: #1e293b;
+            border-radius: 60px;
+            margin-bottom: 16px;
+            color: white;
+        }
+        .login-input:focus { outline: none; border-color: #f59e0b; }
+        .login-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #f59e0b, #ea580c);
+            padding: 14px;
+            border: none;
+            border-radius: 60px;
+            font-weight: bold;
+            cursor: pointer;
+            color: white;
+        }
+        
+        .main-app { display: none; }
+        .app-container { max-width: 1600px; margin: 0 auto; padding: 20px; }
+        
+        .nav-bar {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 60px;
+            padding: 8px 24px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .logo { font-weight: 800; font-size: 1.3rem; background: linear-gradient(135deg, #f59e0b, #ef4444); background-clip: text; -webkit-background-clip: text; color: transparent; }
+        .nav-links { display: flex; gap: 8px; }
+        .nav-btn {
+            background: transparent;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 40px;
+            font-weight: 600;
+            cursor: pointer;
+            color: #94a3b8;
+        }
+        .nav-btn.active { background: #f59e0b; color: #0f172a; }
+        .user-info { display: flex; align-items: center; gap: 12px; background: #1e293b; padding: 6px 16px; border-radius: 40px; }
+        .user-info span { color: #94a3b8; }
+        .logout-btn { background: #ef4444; color: white; border: none; padding: 6px 14px; border-radius: 40px; cursor: pointer; }
+        
+        .upload-zone {
+            background: #1e293b;
+            border: 2px dashed #f59e0b;
+            border-radius: 24px;
+            padding: 30px;
+            margin-bottom: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .upload-zone:hover { background: #334155; border-color: #f59e0b; }
+        .upload-zone.drag-over { background: #2d3748; border-color: #10b981; }
+        .upload-status {
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            padding: 16px;
+            margin-bottom: 20px;
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #334155;
+        }
+        .status-item { font-size: 0.75rem; padding: 4px 0; color: #94a3b8; border-bottom: 1px solid #334155; }
+        .status-item.success { color: #10b981; }
+        .status-item.error { color: #ef4444; }
+        
+        .selection-panel {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            margin-bottom: 16px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .panel-header {
+            background: #1e293b;
+            padding: 14px 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 700;
+            font-size: 1rem;
+            color: #f59e0b;
+        }
+        .panel-header:hover { background: #334155; }
+        .panel-content { padding: 16px 20px; display: none; border-top: 1px solid #334155; }
+        .columns-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+        .col-checkbox {
+            background: #1e293b;
+            padding: 6px 14px;
+            border-radius: 40px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            border: 1px solid #334155;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #94a3b8;
+        }
+        .col-checkbox.selected { background: #f59e0b; border-color: #f59e0b; color: #0f172a; }
+        .sub-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+        .sub-checkbox {
+            background: #1e293b;
+            padding: 4px 12px;
+            border-radius: 40px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            border: 1px solid #334155;
+            color: #94a3b8;
+        }
+        
+        .action-bar {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .btn-primary { background: #f59e0b; padding: 10px 20px; border-radius: 40px; border: none; cursor: pointer; font-weight: 600; color: #0f172a; }
+        .btn-secondary { background: #334155; color: white; padding: 10px 20px; border-radius: 40px; border: none; cursor: pointer; }
+        .btn-success { background: #10b981; color: white; padding: 10px 20px; border-radius: 40px; border: none; cursor: pointer; }
+        .btn-danger { background: #ef4444; color: white; padding: 10px 20px; border-radius: 40px; border: none; cursor: pointer; }
+        .btn-info { background: #3b82f6; color: white; padding: 10px 20px; border-radius: 40px; border: none; cursor: pointer; }
+        .btn-warning { background: #8b5cf6; color: white; padding: 10px 20px; border-radius: 40px; border: none; cursor: pointer; }
+        
+        .search-bar {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .search-input {
+            flex: 2;
+            padding: 10px 16px;
+            border-radius: 40px;
+            border: 1px solid #334155;
+            background: #1e293b;
+            color: white;
+            min-width: 200px;
+        }
+        
+        .results-area {
+            background: #1e293b;
+            border-radius: 24px;
+            padding: 20px;
+            margin-top: 20px;
+            overflow-x: auto;
+            border: 1px solid #334155;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 0.7rem; background: #1e293b; color: #e2e8f0; }
+        th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #334155; vertical-align: top; color: #e2e8f0; }
+        th {
+            background: #2d3748;
+            font-weight: 700;
+            position: sticky;
+            top: 0;
+            cursor: pointer;
+            white-space: nowrap;
+            color: #f59e0b;
+        }
+        th .remove-col {
+            background: #ef4444;
+            border: none;
+            border-radius: 20px;
+            padding: 2px 6px;
+            margin-left: 8px;
+            cursor: pointer;
+            font-size: 0.6rem;
+            color: white;
+        }
+        .status-refunded-not-reimbursed { background: #ef4444; color: white; display: inline-block; padding: 2px 8px; border-radius: 20px; }
+        .status-reimbursed { background: #10b981; color: white; display: inline-block; padding: 2px 8px; border-radius: 20px; }
+        .status-no-refund { background: #f59e0b; color: #0f172a; display: inline-block; padding: 2px 8px; border-radius: 20px; }
+        
+        .data-status {
+            background: #1e293b;
+            border-radius: 16px;
+            padding: 12px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            border: 1px solid #334155;
+            color: #e2e8f0;
+        }
+        .status-active { background: #10b981; color: white; padding: 4px 12px; border-radius: 40px; font-size: 0.7rem; }
+        .status-inactive { background: #64748b; color: white; padding: 4px 12px; border-radius: 40px; font-size: 0.7rem; }
+        
+        .admin-panel { background: #1e293b; border-radius: 24px; padding: 20px; margin-top: 20px; border: 1px solid #334155; }
+        .user-row { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #334155; color: #e2e8f0; }
+        
+        @media (max-width: 768px) { .columns-grid { flex-direction: column; } }
+    </style>
+</head>
+<body>
+<div id="loginOverlay" class="login-overlay">
+    <div class="login-card">
+        <h2>🔐 FBA Tracker</h2>
+        <div class="sub">Report Builder & Removals</div>
+        <input type="text" id="loginEmail" class="login-input" placeholder="Username">
+        <input type="password" id="loginPassword" class="login-input" placeholder="Password">
+        <button class="login-btn" onclick="attemptLogin()">Sign In →</button>
+    </div>
+</div>
+
+<div id="mainApp" class="main-app">
+    <div class="app-container">
+        <div class="nav-bar">
+            <div class="logo">📊 FBA Tracker</div>
+            <div class="nav-links">
+                <button class="nav-btn active" data-view="builder">📋 Report Builder</button>
+                <button class="nav-btn" data-view="removals">📦 Removals</button>
+                <button id="adminBtn" class="nav-btn" style="display:none;">👑 Admin</button>
+            </div>
+            <div class="user-info">
+                <span>👤 <span id="currentUserName">Admin</span></span>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+        </div>
+
+        <!-- Unified Drag & Drop Upload Zone -->
+        <div class="upload-zone" id="uploadZone">
+            <div style="font-size: 2rem;">📁</div>
+            <p>Drag & drop CSV files here or click to upload</p>
+            <p style="font-size: 0.7rem; margin-top: 8px;">System automatically detects report type by headers</p>
+            <input type="file" id="fileInput" multiple accept=".csv" style="display:none">
+        </div>
+        <div id="uploadStatus" class="upload-status"></div>
+
+        <!-- Report Builder View -->
+        <div id="builderView">
+            <div class="search-bar">
+                <input type="text" id="globalSearch" class="search-input" placeholder="🔍 Search across all data...">
+                <button id="toggleRefundedNotReimbursedBtn" class="btn-danger">💰 Show Only Refunded NOT Reimbursed</button>
+            </div>
+
+            <div id="rpobFilterStatus" class="data-status" style="display:none;">
+                <span>📋 RP OB Report Filter: <strong id="rpobCount">0</strong> Order IDs loaded</span>
+                <span id="rpobActiveBadge" class="status-inactive">Filter Inactive</span>
+                <button id="toggleRpobFilterBtn" class="btn-secondary" style="padding: 4px 16px;">Enable Filter</button>
+            </div>
+
+            <div id="builderSelectionPanels"></div>
+
+            <div class="action-bar">
+                <div class="action-buttons">
+                    <button id="selectAllBuilderColsBtn" class="btn-secondary">✓ Select All Columns</button>
+                    <button id="deselectAllBuilderColsBtn" class="btn-secondary">✗ Deselect All Columns</button>
+                </div>
+                <div class="action-buttons">
+                    <button id="generateBuilderReportBtn" class="btn-primary">🔍 Generate Report</button>
+                    <button id="clearBuilderTableBtn" class="btn-warning">🗑️ Clear Table</button>
+                    <button id="moveToRemovalsBtn" class="btn-info">📦 Move to Removals</button>
+                    <button id="exportBuilderCsvBtn" class="btn-success">📎 Export CSV</button>
+                </div>
+            </div>
+
+            <div id="builderResults" class="results-area">
+                <div style="color:#94a3b8; text-align:center; padding:40px;">Upload files, select columns, then click "Generate Report".</div>
+            </div>
+        </div>
+
+        <!-- Removals View -->
+        <div id="removalsView" style="display:none;">
+            <div id="removalsDataStatus" class="data-status" style="display:none;">
+                <span>📊 Base Data: <strong id="removalsReportCount">0</strong> rows</span>
+                <span>📦 Inventory: <strong id="removalsInventoryCount">0</strong> | Removal Orders: <strong id="removalsOrderCount">0</strong> | Shipments: <strong id="removalsShipmentCount">0</strong></span>
+                <span id="removalsDataBadge" class="status-inactive">Waiting for data</span>
+            </div>
+
+            <div class="selection-panel">
+                <div class="panel-header" onclick="togglePanel(this)">🏷️ FILTER INVENTORY EVENTS BY TYPE</div>
+                <div class="panel-content" id="removalsEventFilterPanel"></div>
+            </div>
+
+            <div class="search-bar">
+                <input type="text" id="removalsGlobalSearch" class="search-input" placeholder="🔍 Search across all data...">
+                <button id="updateRemovalsReportBtn" class="btn-primary">🔄 Update Report</button>
+                <button id="clearRemovalsTableBtn" class="btn-warning">🗑️ Clear Table</button>
+                <button id="exportRemovalsCsvBtn" class="btn-success">📎 Export CSV</button>
+            </div>
+
+            <div id="removalsSelectionPanels"></div>
+
+            <div id="removalsResults" class="results-area">
+                <div style="color:#94a3b8; text-align:center; padding:40px;">Upload Inventory Ledger, Removal Order, Removal Shipment, then click "Update Report".</div>
+            </div>
+        </div>
+
+        <div id="adminView" style="display:none;"></div>
+    </div>
+</div>
+
+<script>
+    // ========== USER MANAGEMENT ==========
+    let currentUser = null;
+    let isAdmin = false;
+    let users = [{ id: 1, email: 'AP', password: 'pandrei', name: 'Admin', role: 'admin' }];
+    
+    function saveUsers() { localStorage.setItem('fba_users', JSON.stringify(users)); }
+    function loadUsers() { const s = localStorage.getItem('fba_users'); if(s) users = JSON.parse(s); }
+    loadUsers();
+
+    function attemptLogin() {
+        const email = document.getElementById('loginEmail').value;
+        const pwd = document.getElementById('loginPassword').value;
+        const user = users.find(u => u.email === email && u.password === pwd);
+        if(user) {
+            currentUser = user;
+            isAdmin = user.role === 'admin';
+            document.getElementById('loginOverlay').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'block';
+            document.getElementById('currentUserName').innerText = user.name;
+            if(isAdmin) document.getElementById('adminBtn').style.display = 'inline-block';
+            initApp();
+        } else { alert('Invalid credentials'); }
+    }
+    function logout() { document.getElementById('loginOverlay').style.display = 'flex'; document.getElementById('mainApp').style.display = 'none'; }
+
+    // ========== REPORT HEADERS FOR DETECTION ==========
+    const REPORT_HEADERS = {
+        fbaReturns: ["return-date","order-id","sku","asin","fnsku","product-name","quantity","fulfillment-center-id","detailed-disposition","reason","status","license-plate-number","customer-comments"],
+        gradeResell: ["date","order-id","value-recovery-type","lpn","manual-order-item-id","merchant-sku","fnsku","asin","quantity","unit-status","reason-for-unit-status","grade-and-resell-used-condition","grade-and-resell-used-merchant-sku","grade-and-resell-used-fnsku"],
+        reimbursements: ["approval-date","reimbursement-id","case-id","amazon-order-id","reason","sku","fnsku","asin","product-name","condition","currency-unit","amount-per-unit","amount-total","quantity-reimbursed-cash","quantity-reimbursed-inventory","quantity-reimbursed-total","original-reimbursement-id","original-reimbursement-type"],
+        reportsRepo: ["date/time","settlement id","type","order id","sku","description","quantity","marketplace","fulfilment","order city","order state","order postal","tax collection model","product sales","product sales tax","postage credits","shipping credits tax","gift wrap credits","giftwrap credits tax","promotional rebates","promotional rebates tax","marketplace withheld tax","selling fees","fba fees","other transaction fees","other","total","Transaction status","Transaction Release Date"],
+        returnsReconciliation: ["Return type","Customer order ID","Shipment ID","FNSKU","SKU","ASIN","Custom ID1","Custom ID2","Custom ID3","Units","Forward leg tracking ID","Reverse leg tracking ID","Return merchandise authorisation","ID","Return status","Carrier","Pick-up date","Last updated on","Returned with OTP","Days In-transit","Days Since Return Complete","Return Reason","LPN"],
+        rpobReport: ["Serial number(s).1", "Order ID"],
+        inventoryLedger: ["Date","FNSKU","ASIN","MSKU","Title","Event Type","Reference ID","Quantity","Fulfillment Center","Disposition","Reason","Country","Reconciled Quantity","Unreconciled Quantity","Date and Time"],
+        removalOrder: ["request-date","order-id","order-source","order-type","service-speed","order-status","last-updated-date","sku","fnsku","disposition","requested-quantity","cancelled-quantity","disposed-quantity","shipped-quantity","in-process-quantity","removal-fee","currency"],
+        removalShipment: ["request-date","order-id","shipment-date","sku","fnsku","disposition","shipped-quantity","carrier","tracking-number","removal-order-type"]
+    };
+
+    // ========== INDEXEDDB ==========
+    const DB_NAME = 'FBATracker';
+    const DB_VERSION = 4;
+    let db = null;
+
+    let datasets = {
+        fbaReturns: [], gradeResell: [], reimbursements: [], reportsRepo: [], returnsReconciliation: [], rpobReport: [],
+        inventoryLedger: [], removalOrder: [], removalShipment: []
+    };
+    let storedRemovalsBaseData = [];
+    
+    // RP OB Filter state
+    let rpobFilterEnabled = false;
+    let rpobOrderIds = new Set();
+    
+    // Filter options
+    const detailedDispositions = ["CARRIER_DAMAGED", "CUSTOMER_DAMAGED", "DEFECTIVE", "SELLABLE"];
+    const unitStatuses = ["Failed", "Succeeded"];
+    const gradeConditions = ["Used - Acceptable", "Used - Good", "Used - Like New", "Used - Poor", "Used - Very Good"];
+    const refundTransactionTypes = ["Refund", "Chargeback Refund", "Refund_Retrocharge"];
+    const returnStatuses = ["Picked up from customer", "Return initiated", "In transit to Seller Flex node", "Return processed in FC", "Stop and return request by Amazon"];
+    const allEventTypes = ["Adjustments", "VendorReturns", "CustomerReturns", "Receipts", "Shipments", "Whsetransfers"];
+    let selectedEventTypes = [...allEventTypes];
+    let selectedDispositions = [...detailedDispositions];
+    let selectedUnitStatuses = [...unitStatuses];
+    let selectedGradeConditions = [...gradeConditions];
+    let selectedReturnStatuses = [...returnStatuses];
+    let showRefundedNotReimbursedOnly = false;
+    
+    // Column visibility state
+    let visibleBuilderColumns = {};
+    let visibleRemovalsColumns = {};
+    let currentBuilderData = [];
+    let currentRemovalsData = [];
+    let builderSortColumn = null;
+    let builderSortDirection = 'asc';
+    let removalsSortColumn = null;
+    let removalsSortDirection = 'asc';
+
+    // Helper functions
+    function formatDate(dateStr) {
+        if(!dateStr) return '-';
+        try { 
+            let d = new Date(dateStr); 
+            if(isNaN(d.getTime())) return '-'; 
+            return `${d.getDate().toString().padStart(2,'0')}-${(d.getMonth()+1).toString().padStart(2,'0')}-${d.getFullYear().toString().slice(-2)}`; 
+        } catch(e) { return '-'; }
+    }
+
+    function getCleanReturnDate(returnDateStr) {
+        if(!returnDateStr || returnDateStr === '-') return null;
+        let clean = returnDateStr.replace(/\s*\(RR\)/i, '').trim();
+        const parts = clean.split('-');
+        if(parts.length === 3) {
+            const isoDate = `20${parts[2]}-${parts[1]}-${parts[0]}`;
+            const date = new Date(isoDate);
+            if(!isNaN(date.getTime())) return date;
+        }
+        return null;
+    }
+
+    function normalizeMerchantSku(sku) {
+        if(!sku) return '';
+        const match = sku.match(/amzn\.gr\.([A-Z0-9]+)/i);
+        if(match) return match[1];
+        const match2 = sku.match(/amzn\.gr\.([A-Z0-9]+)-/i);
+        if(match2) return match2[1];
+        return sku;
+    }
+
+    function initIndexedDB() {
+        return new Promise((resolve, reject) => {
+            const r = indexedDB.open(DB_NAME, DB_VERSION);
+            r.onerror = () => reject(r.error);
+            r.onsuccess = () => { db = r.result; loadAllData().then(resolve); };
+            r.onupgradeneeded = (e) => {
+                const db_ = e.target.result;
+                Object.keys(REPORT_HEADERS).forEach(storeName => {
+                    if (!db_.objectStoreNames.contains(storeName)) db_.createObjectStore(storeName);
+                });
+                if (!db_.objectStoreNames.contains('removalsBaseData')) db_.createObjectStore('removalsBaseData');
+            };
+        });
+    }
+
+    async function saveToDB(storeName, data) {
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction([storeName], 'readwrite');
+            tx.objectStore(storeName).put(data, 'data');
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+        });
+    }
+
+    async function loadFromDB(storeName) {
+        return new Promise((resolve) => {
+            const tx = db.transaction([storeName], 'readonly');
+            const req = tx.objectStore(storeName).get('data');
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => resolve([]);
+        });
+    }
+
+    async function clearAllData() {
+        if(!confirm("⚠️ WARNING: This will delete ALL uploaded data. Are you sure?")) return;
+        for(const storeName of Object.keys(REPORT_HEADERS)) {
+            await saveToDB(storeName, []);
+            datasets[storeName] = [];
+        }
+        await saveToDB('removalsBaseData', []);
+        storedRemovalsBaseData = [];
+        alert("All data cleared successfully");
+        updateRemovalsDataStatus();
+        renderBuilderReport();
+        renderRemovalsReport();
+    }
+
+    async function loadAllData() {
+        for(const [reportType] of Object.entries(REPORT_HEADERS)) {
+            datasets[reportType] = await loadFromDB(reportType);
+            if(reportType === 'rpobReport') updateRpobFilterSet();
+        }
+        storedRemovalsBaseData = await loadFromDB('removalsBaseData');
+        updateRemovalsDataStatus();
+        updateRpobFilterUI();
+    }
+
+    function updateRpobFilterSet() {
+        rpobOrderIds.clear();
+        const rpobData = datasets.rpobReport || [];
+        for(const row of rpobData) {
+            const orderId = row['Order ID']?.toString().trim();
+            if(orderId) rpobOrderIds.add(orderId);
+        }
+        const ce = document.getElementById('rpobCount');
+        if(ce) ce.innerText = rpobOrderIds.size;
+    }
+
+    function updateRpobFilterUI() {
+        const statusDiv = document.getElementById('rpobFilterStatus');
+        const badge = document.getElementById('rpobActiveBadge');
+        const btn = document.getElementById('toggleRpobFilterBtn');
+        if(datasets.rpobReport?.length > 0) {
+            if(statusDiv) statusDiv.style.display = 'flex';
+            if(rpobFilterEnabled) {
+                if(badge) { badge.innerText = '✅ Filter Active'; badge.className = 'status-active'; }
+                if(btn) btn.innerText = 'Disable Filter';
+            } else {
+                if(badge) { badge.innerText = '⭕ Filter Inactive'; badge.className = 'status-inactive'; }
+                if(btn) btn.innerText = 'Enable Filter';
+            }
+        } else if(statusDiv) statusDiv.style.display = 'none';
+    }
+
+    function toggleRpobFilter() { 
+        rpobFilterEnabled = !rpobFilterEnabled; 
+        updateRpobFilterUI(); 
+        renderBuilderReport();
+    }
+
+    function updateRemovalsDataStatus() {
+        const statusDiv = document.getElementById('removalsDataStatus');
+        const reportCount = document.getElementById('removalsReportCount');
+        const inventoryCount = document.getElementById('removalsInventoryCount');
+        const orderCount = document.getElementById('removalsOrderCount');
+        const shipmentCount = document.getElementById('removalsShipmentCount');
+        const badge = document.getElementById('removalsDataBadge');
+        
+        const repLen = storedRemovalsBaseData.length;
+        const invLen = datasets.inventoryLedger?.length || 0;
+        const ordLen = datasets.removalOrder?.length || 0;
+        const shpLen = datasets.removalShipment?.length || 0;
+        
+        if(reportCount) reportCount.innerText = repLen.toLocaleString();
+        if(inventoryCount) inventoryCount.innerText = invLen.toLocaleString();
+        if(orderCount) orderCount.innerText = ordLen.toLocaleString();
+        if(shipmentCount) shipmentCount.innerText = shpLen.toLocaleString();
+        
+        if(repLen > 0 && (invLen > 0 || ordLen > 0 || shpLen > 0)) {
+            statusDiv.style.display = 'flex';
+            if(badge) { badge.innerText = '✅ Data Ready'; badge.className = 'status-active'; }
+        } else if(repLen > 0) {
+            statusDiv.style.display = 'flex';
+            if(badge) { badge.innerText = '⚠️ Upload Removals Reports'; badge.className = 'status-inactive'; }
+        } else if(invLen > 0 || ordLen > 0 || shpLen > 0) {
+            statusDiv.style.display = 'flex';
+            if(badge) { badge.innerText = '⚠️ Move data from Report Builder'; badge.className = 'status-inactive'; }
+        } else {
+            statusDiv.style.display = 'none';
+        }
+    }
+
+    function detectReportType(headers) {
+        const headerSet = new Set(headers.map(h => h.toLowerCase().trim()));
+        for(const [reportType, requiredHeaders] of Object.entries(REPORT_HEADERS)) {
+            const matchCount = requiredHeaders.filter(h => headerSet.has(h.toLowerCase())).length;
+            if(matchCount >= requiredHeaders.length * 0.7) {
+                return reportType;
+            }
+        }
+        return null;
+    }
+
+    function parseCSV(text) {
+        const lines = []; let cur = "", inQ = false;
+        for(let i=0;i<text.length;i++) { cur += text[i]; if(text[i] === '"') inQ = !inQ; if(text[i] === '\n' && !inQ) { if(cur.trim()) lines.push(cur.trim()); cur = ""; } }
+        if(cur.trim()) lines.push(cur.trim());
+        if(lines.length<2) return [];
+        const parseLine = (l) => {
+            let res=[], curr="", q=false;
+            for(let i=0;i<l.length;i++) {
+                let c=l[i];
+                if(c==='"') { if(q && l[i+1]==='"') { curr+='"'; i++; } else q=!q; }
+                else if(c===',' && !q) { res.push(curr.trim()); curr=""; }
+                else curr+=c;
+            }
+            res.push(curr.trim());
+            return res.map(v=>v.replace(/^"|"$/g,''));
+        };
+        const headers = parseLine(lines[0]);
+        const result = [];
+        for(let i=1;i<lines.length;i++) {
+            const vals = parseLine(lines[i]);
+            if(vals.length < 2) continue;
+            let obj = {};
+            headers.forEach((h,idx) => { obj[h] = vals[idx] || ""; });
+            result.push(obj);
+        }
+        return result;
+    }
+
+    async function processFiles(files) {
+        const statusDiv = document.getElementById('uploadStatus');
+        for(const file of files) {
+            const statusItem = document.createElement('div');
+            statusItem.className = 'status-item';
+            statusItem.textContent = `Processing: ${file.name}...`;
+            statusDiv.prepend(statusItem);
+            
+            try {
+                const text = await file.text();
+                const parsed = parseCSV(text);
+                if(parsed.length === 0) throw new Error('No data rows');
+                
+                const headers = Object.keys(parsed[0]);
+                const reportType = detectReportType(headers);
+                
+                if(!reportType) {
+                    statusItem.textContent = `❌ ${file.name}: Unknown report type`;
+                    statusItem.className = 'status-item error';
+                    continue;
+                }
+                
+                await saveToDB(reportType, parsed);
+                datasets[reportType] = parsed;
+                
+                if(reportType === 'rpobReport') {
+                    updateRpobFilterSet();
+                    updateRpobFilterUI();
+                }
+                if(reportType === 'inventoryLedger' || reportType === 'removalOrder' || reportType === 'removalShipment') {
+                    updateRemovalsDataStatus();
+                }
+                
+                statusItem.textContent = `✅ ${file.name}: ${parsed.length} rows - ${reportType}`;
+                statusItem.className = 'status-item success';
+            } catch(err) {
+                statusItem.textContent = `❌ ${file.name}: ${err.message}`;
+                statusItem.className = 'status-item error';
+            }
+        }
+        
+        if(datasets.fbaReturns?.length || datasets.gradeResell?.length) renderBuilderReport();
+        if(datasets.inventoryLedger?.length || datasets.removalOrder?.length) renderRemovalsReport();
+    }
+
+    // Setup upload zone
+    function setupUploadZone() {
+        const zone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        
+        zone.onclick = () => fileInput.click();
+        zone.ondragover = (e) => { e.preventDefault(); zone.classList.add('drag-over'); };
+        zone.ondragleave = () => zone.classList.remove('drag-over');
+        zone.ondrop = async (e) => {
+            e.preventDefault();
+            zone.classList.remove('drag-over');
+            await processFiles(Array.from(e.dataTransfer.files));
+        };
+        
+        fileInput.onchange = async (e) => {
+            await processFiles(Array.from(e.target.files));
+            fileInput.value = '';
+        };
+    }
+
+    // Builder Display Columns
+    const builderDisplayColumns = [
+        'Return Date', 'Order ID', 'Merchant SKU', 'ASIN', 'FNSKU', 'Grade Changed FNSKU', 'Detailed Disposition',
+        'Grade Unit Status', 'Grade Condition', 'Reimbursement ID', 'Repo Transaction Type',
+        'Recon Return Status', 'Recon Days In-transit', 'Has Refund in Repo?', 'Has Reimbursement?',
+        'In FBA Returns?', 'In Grade & Resell?', 'In Returns Reconciliation?', 'Status'
+    ];
+
+    // Removals Display Columns
+    const removalsDisplayColumns = [
+        'Return Date', 'Order ID', 'ASIN', 'FNSKU', 'Grade Changed FNSKU', 'Merchant SKU', 'Detailed Disposition',
+        'Event Type 1', 'Quantity 1', 'Event Date 1', 'Reference ID 1',
+        'Event Type 2', 'Quantity 2', 'Event Date 2', 'Reference ID 2',
+        'Event Type 3', 'Quantity 3', 'Event Date 3', 'Reference ID 3',
+        'Event Type 4', 'Quantity 4', 'Event Date 4', 'Reference ID 4',
+        'Event Type 5', 'Quantity 5', 'Event Date 5', 'Reference ID 5',
+        'Removal Order ID', 'Order Status', 'Removal Last Updated', 'Requested Qty', 'Cancelled Qty', 'Disposed Qty', 'Shipped Qty', 'In Process Qty',
+        'Shipment Date', 'Carrier', 'Tracking Number'
+    ];
+
+    // Initialize column visibility
+    builderDisplayColumns.forEach(col => visibleBuilderColumns[col] = true);
+    removalsDisplayColumns.forEach(col => visibleRemovalsColumns[col] = true);
+
+    // Generate Builder Report
+    function generateBuilderReport() {
+        const searchTerm = document.getElementById('globalSearch')?.value.toLowerCase() || '';
+        const returnsData = datasets.fbaReturns || [];
+        const gradeData = datasets.gradeResell || [];
+        const reimbData = datasets.reimbursements || [];
+        const repoData = datasets.reportsRepo || [];
+        const reconData = datasets.returnsReconciliation || [];
+        
+        const results = [];
+        const allOrderIds = new Set();
+        returnsData.forEach(row => { if(row['order-id']) allOrderIds.add(row['order-id'].toString().trim()); });
+        gradeData.forEach(row => { if(row['order-id']) allOrderIds.add(row['order-id'].toString().trim()); });
+        reconData.forEach(row => { if(row['Customer order ID']) allOrderIds.add(row['Customer order ID'].toString().trim()); });
+        
+        for(const orderId of allOrderIds) {
+            if(rpobFilterEnabled && !rpobOrderIds.has(orderId)) continue;
+            
+            const returnRow = returnsData.find(r => r['order-id']?.toString().trim() === orderId);
+            const gradeRow = gradeData.find(r => r['order-id']?.toString().trim() === orderId);
+            const reimbRow = reimbData.find(r => r['amazon-order-id']?.toString().trim() === orderId);
+            const repoRow = repoData.find(r => r['order id']?.toString().trim() === orderId);
+            const reconRow = reconData.find(r => r['Customer order ID']?.toString().trim() === orderId);
+            
+            const disposition = returnRow ? returnRow['detailed-disposition'] : '';
+            if(!selectedDispositions.includes(disposition) && selectedDispositions.length > 0 && returnRow) continue;
+            
+            const unitStatus = gradeRow ? gradeRow['unit-status'] : '';
+            if(!selectedUnitStatuses.includes(unitStatus) && selectedUnitStatuses.length > 0 && gradeRow) continue;
+            const gradeCondition = gradeRow ? gradeRow['grade-and-resell-used-condition'] : '';
+            if(!selectedGradeConditions.includes(gradeCondition) && selectedGradeConditions.length > 0 && gradeRow) continue;
+            const returnStatus = reconRow ? reconRow['Return status'] : '';
+            if(!selectedReturnStatuses.includes(returnStatus) && selectedReturnStatuses.length > 0 && reconRow) continue;
+            
+            const transactionType = repoRow ? repoRow['type'] : '';
+            const hasRefund = repoRow && refundTransactionTypes.includes(transactionType);
+            const hasReimbursement = !!reimbRow;
+            if(showRefundedNotReimbursedOnly && !(hasRefund && !hasReimbursement)) continue;
+            
+            if(searchTerm && !orderId.toLowerCase().includes(searchTerm) && 
+               !(returnRow?.sku || '').toLowerCase().includes(searchTerm) &&
+               !(returnRow?.asin || '').toLowerCase().includes(searchTerm)) continue;
+            
+            const row = {};
+            
+            let returnDateValue = '-';
+            if(reconRow && reconRow['Pick-up date']) returnDateValue = formatDate(reconRow['Pick-up date']) + ' (RR)';
+            else if(reconRow && reconRow['Last updated on']) returnDateValue = formatDate(reconRow['Last updated on']) + ' (RR)';
+            else if(returnRow && returnRow['return-date']) returnDateValue = formatDate(returnRow['return-date']);
+            
+            let merchantSkuValue = '-';
+            if(gradeRow && gradeRow['grade-and-resell-used-merchant-sku']) merchantSkuValue = gradeRow['grade-and-resell-used-merchant-sku'];
+            else if(gradeRow && gradeRow['merchant-sku']) merchantSkuValue = gradeRow['merchant-sku'];
+            else if(returnRow && returnRow['sku']) merchantSkuValue = returnRow['sku'];
+            
+            let asinValue = returnRow?.asin || gradeRow?.asin || reconRow?.ASIN || '-';
+            let fnskuValue = returnRow?.fnsku || gradeRow?.fnsku || reconRow?.FNSKU || '-';
+            let gradeChangedFnsku = (gradeRow && gradeRow['grade-and-resell-used-fnsku'] && gradeRow['grade-and-resell-used-fnsku'] !== fnskuValue) ? gradeRow['grade-and-resell-used-fnsku'] : '-';
+            
+            row['Return Date'] = returnDateValue;
+            row['Order ID'] = orderId;
+            row['Merchant SKU'] = merchantSkuValue;
+            row['ASIN'] = asinValue;
+            row['FNSKU'] = fnskuValue;
+            row['Grade Changed FNSKU'] = gradeChangedFnsku;
+            row['Detailed Disposition'] = disposition || '-';
+            row['Grade Unit Status'] = unitStatus || '-';
+            row['Grade Condition'] = gradeCondition || '-';
+            row['Reimbursement ID'] = reimbRow?.['reimbursement-id'] || '-';
+            row['Repo Transaction Type'] = transactionType || '-';
+            row['Recon Return Status'] = returnStatus || '-';
+            row['Recon Days In-transit'] = reconRow?.['Days In-transit'] || '-';
+            row['Has Refund in Repo?'] = hasRefund ? 'YES' : 'NO';
+            row['Has Reimbursement?'] = hasReimbursement ? 'YES' : 'NO';
+            row['In FBA Returns?'] = returnRow ? 'YES' : 'NO';
+            row['In Grade & Resell?'] = gradeRow ? 'YES' : 'NO';
+            row['In Returns Reconciliation?'] = reconRow ? 'YES' : 'NO';
+            
+            let status = '';
+            if(hasRefund && !hasReimbursement) status = '💰 REFUNDED NOT REIMBURSED';
+            else if(hasReimbursement) status = '✅ REIMBURSED';
+            else status = '❓ NO REFUND FOUND';
+            row['Status'] = status;
+            
+            results.push(row);
+        }
+        return results;
+    }
+
+    // Generate Removals Report with full matching
+    function generateRemovalsReport() {
+        if(storedRemovalsBaseData.length === 0) return [];
+        
+        const inventoryData = datasets.inventoryLedger || [];
+        const removalOrderData = datasets.removalOrder || [];
+        const removalShipmentData = datasets.removalShipment || [];
+        const searchTerm = document.getElementById('removalsGlobalSearch')?.value.toLowerCase() || '';
+        
+        // Build inventory lookup by FNSKU + ASIN + MSKU
+        const inventoryByKey = new Map();
+        inventoryData.forEach(inv => {
+            const fnsku = inv['FNSKU']?.toString().trim() || '';
+            const asin = inv['ASIN']?.toString().trim() || '';
+            const msku = inv['MSKU']?.toString().trim() || '';
+            if(fnsku && asin) {
+                const key = `${fnsku}|${asin}`;
+                if(!inventoryByKey.has(key)) inventoryByKey.set(key, []);
+                inventoryByKey.get(key).push(inv);
+                
+                if(msku) {
+                    const mskuKey = `${msku}|${asin}`;
+                    if(!inventoryByKey.has(mskuKey)) inventoryByKey.set(mskuKey, []);
+                    inventoryByKey.get(mskuKey).push(inv);
+                }
+            }
+        });
+        
+        // Sort inventory entries by date
+        for(const [key, entries] of inventoryByKey.entries()) {
+            entries.sort((a, b) => {
+                const dateA = new Date(a['Date'] || a['Date and Time'] || 0);
+                const dateB = new Date(b['Date'] || b['Date and Time'] || 0);
+                return dateA - dateB;
+            });
+        }
+        
+        const results = [];
+        const MAX_EVENTS = 5;
+        
+        for(const baseRow of storedRemovalsBaseData) {
+            const returnDateDisplay = baseRow['Return Date'] || '-';
+            const orderId = baseRow['Order ID'] || '-';
+            const asin = baseRow['ASIN'] || '-';
+            const fnsku = baseRow['FNSKU'] || '-';
+            const gradeChangedFnsku = baseRow['Grade Changed FNSKU'] || '-';
+            const merchantSku = baseRow['Merchant SKU'] || '-';
+            const detailedDisposition = baseRow['Detailed Disposition'] || '-';
+            
+            // Use Grade Changed FNSKU for matching if available, otherwise original FNSKU
+            const matchFnsku = (gradeChangedFnsku && gradeChangedFnsku !== '-') ? gradeChangedFnsku : fnsku;
+            const returnDateObj = getCleanReturnDate(returnDateDisplay);
+            
+            // Find matching inventory entries
+            let inventoryEntries = [];
+            const key1 = `${matchFnsku}|${asin}`;
+            const key2 = `${merchantSku}|${asin}`;
+            
+            let matches = inventoryByKey.get(key1) || [];
+            if(matches.length === 0 && merchantSku !== '-') {
+                matches = inventoryByKey.get(key2) || [];
+            }
+            
+            if(matches.length > 0 && returnDateObj) {
+                const entriesWithDistance = matches.map(inv => {
+                    const invDate = new Date(inv['Date'] || inv['Date and Time'] || 0);
+                    const distance = Math.abs(invDate - returnDateObj);
+                    return { inv, invDate, distance };
+                });
+                entriesWithDistance.sort((a, b) => a.distance - b.distance);
+                const closestDate = entriesWithDistance[0].invDate;
+                inventoryEntries = matches.filter(inv => {
+                    const invDate = new Date(inv['Date'] || inv['Date and Time'] || 0);
+                    return invDate.toDateString() === closestDate.toDateString();
+                });
+            } else if(matches.length > 0) {
+                inventoryEntries = matches;
+            }
+            
+            // Filter by selected event types
+            inventoryEntries = inventoryEntries.filter(inv => selectedEventTypes.includes(inv['Event Type']));
+            
+            // Create base row
+            const row = {
+                'Return Date': returnDateDisplay,
+                'Order ID': orderId,
+                'ASIN': asin,
+                'FNSKU': fnsku,
+                'Grade Changed FNSKU': gradeChangedFnsku,
+                'Merchant SKU': merchantSku,
+                'Detailed Disposition': detailedDisposition
+            };
+            
+            // Add inventory event columns
+            for(let i = 0; i < MAX_EVENTS; i++) {
+                const event = inventoryEntries[i];
+                if(event) {
+                    const qty = parseFloat(event['Quantity'] || '0');
+                    const qtyDisplay = qty > 0 ? `+${event['Quantity']}` : event['Quantity'];
+                    row[`Event Type ${i+1}`] = event['Event Type'] || '-';
+                    row[`Quantity ${i+1}`] = qtyDisplay;
+                    row[`Event Date ${i+1}`] = formatDate(event['Date'] || event['Date and Time']);
+                    row[`Reference ID ${i+1}`] = event['Reference ID'] || '-';
+                } else {
+                    row[`Event Type ${i+1}`] = '-';
+                    row[`Quantity ${i+1}`] = '-';
+                    row[`Event Date ${i+1}`] = '-';
+                    row[`Reference ID ${i+1}`] = '-';
+                }
+            }
+            
+            // Find matching removal order
+            let removalMatch = null;
+            if(merchantSku && merchantSku !== '-') {
+                const matchingOrders = removalOrderData.filter(ro => {
+                    const roSku = ro['sku']?.toString().trim() || '';
+                    const roFnsku = ro['fnsku']?.toString().trim() || '';
+                    const normalizedSku = normalizeMerchantSku(roSku);
+                    const normalizedMsku = normalizeMerchantSku(merchantSku);
+                    return roSku === merchantSku || normalizedSku === normalizedMsku || roFnsku === matchFnsku;
+                });
+                if(matchingOrders.length > 0) removalMatch = matchingOrders[0];
+            }
+            
+            if(removalMatch) {
+                row['Removal Order ID'] = removalMatch['order-id'] || '-';
+                row['Order Status'] = removalMatch['order-status'] || '-';
+                row['Removal Last Updated'] = formatDate(removalMatch['last-updated-date']);
+                row['Requested Qty'] = removalMatch['requested-quantity'] || '-';
+                row['Cancelled Qty'] = removalMatch['cancelled-quantity'] || '-';
+                row['Disposed Qty'] = removalMatch['disposed-quantity'] || '-';
+                row['Shipped Qty'] = removalMatch['shipped-quantity'] || '-';
+                row['In Process Qty'] = removalMatch['in-process-quantity'] || '-';
+                
+                // Find matching removal shipment
+                const removalOrderId = removalMatch['order-id']?.toString().trim();
+                const matchingShipments = removalShipmentData.filter(rs => {
+                    const rsOrderId = rs['order-id']?.toString().trim();
+                    return rsOrderId === removalOrderId;
+                });
+                
+                if(matchingShipments.length > 0) {
+                    const shipment = matchingShipments[matchingShipments.length - 1];
+                    row['Shipment Date'] = formatDate(shipment['shipment-date']);
+                    row['Carrier'] = shipment['carrier'] || '-';
+                    row['Tracking Number'] = shipment['tracking-number'] || '-';
+                } else {
+                    row['Shipment Date'] = '-';
+                    row['Carrier'] = '-';
+                    row['Tracking Number'] = '-';
+                }
+            } else {
+                row['Removal Order ID'] = '-';
+                row['Order Status'] = '-';
+                row['Removal Last Updated'] = '-';
+                row['Requested Qty'] = '-';
+                row['Cancelled Qty'] = '-';
+                row['Disposed Qty'] = '-';
+                row['Shipped Qty'] = '-';
+                row['In Process Qty'] = '-';
+                row['Shipment Date'] = '-';
+                row['Carrier'] = '-';
+                row['Tracking Number'] = '-';
+            }
+            
+            if(searchTerm && !Object.values(row).some(v => v && v.toString().toLowerCase().includes(searchTerm))) continue;
+            results.push(row);
+        }
+        
+        return results;
+    }
+
+    // Render Functions
+    function renderBuilderTable() {
+        const data = currentBuilderData;
+        if(!data || data.length === 0) {
+            document.getElementById('builderResults').innerHTML = '<div style="color:#94a3b8; text-align:center; padding:40px;">No data. Upload files and click Generate Report.</div>';
+            return;
+        }
+        
+        const visibleCols = builderDisplayColumns.filter(col => visibleBuilderColumns[col]);
+        if(visibleCols.length === 0) {
+            document.getElementById('builderResults').innerHTML = '<div style="color:#94a3b8; text-align:center; padding:40px;">All columns hidden. Select columns to display.</div>';
+            return;
+        }
+        
+        let html = `<div style="overflow-x:auto;"><table id="builderTable"><thead><tr>`;
+        for(const col of visibleCols) {
+            html += `<th onclick="sortBuilderColumn('${col.replace(/'/g,"\\'")}')">
+                ${col}
+                <span style="font-size:0.6rem;">${builderSortColumn === col ? (builderSortDirection === 'asc' ? '↑' : '↓') : ''}</span>
+                <button class="remove-col" onclick="hideBuilderColumn('${col.replace(/'/g,"\\'")}')">✗</button>
+            </th>`;
+        }
+        html += `</thead><tbody id="builderTableBody"></tbody></table></div>`;
+        document.getElementById('builderResults').innerHTML = html;
+        renderBuilderTableBody(visibleCols);
+    }
+
+    function renderBuilderTableBody(visibleCols) {
+        let filteredData = [...currentBuilderData];
+        if(builderSortColumn) {
+            filteredData.sort((a,b) => { let aVal = a[builderSortColumn] || '', bVal = b[builderSortColumn] || ''; return builderSortDirection === 'asc' ? aVal.toString().localeCompare(bVal.toString()) : -aVal.toString().localeCompare(bVal.toString()); });
+        }
+        const tbody = document.getElementById('builderTableBody');
+        if(!tbody) return;
+        tbody.innerHTML = '';
+        for(const row of filteredData.slice(0, 5000)) {
+            let tr = '<tr>';
+            for(const col of visibleCols) {
+                let val = row[col] || '-';
+                let className = '';
+                if(col === 'Status' && val.includes('REFUNDED NOT REIMBURSED')) className = 'status-refunded-not-reimbursed';
+                else if(col === 'Status' && val.includes('REIMBURSED')) className = 'status-reimbursed';
+                else if(col === 'Status') className = 'status-no-refund';
+                tr += `<td${className ? ` class="${className}"` : ''}>${val}</td>`;
+            }
+            tr += '</tr>';
+            tbody.innerHTML += tr;
+        }
+    }
+
+    function sortBuilderColumn(col) {
+        if(builderSortColumn === col) builderSortDirection = builderSortDirection === 'asc' ? 'desc' : 'asc';
+        else { builderSortColumn = col; builderSortDirection = 'asc'; }
+        const visibleCols = builderDisplayColumns.filter(col => visibleBuilderColumns[col]);
+        renderBuilderTableBody(visibleCols);
+    }
+
+    function hideBuilderColumn(colName) {
+        visibleBuilderColumns[colName] = false;
+        const checkbox = document.querySelector(`.builder-col-select[data-col="${colName}"]`);
+        if(checkbox) {
+            checkbox.checked = false;
+            checkbox.closest('.col-checkbox')?.classList.remove('selected');
+        }
+        renderBuilderTable();
+    }
+
+    function renderBuilderReport() {
+        currentBuilderData = generateBuilderReport();
+        renderBuilderTable();
+    }
+
+    function clearBuilderTable() {
+        currentBuilderData = [];
+        renderBuilderTable();
+    }
+
+    function renderRemovalsTable() {
+        const data = currentRemovalsData;
+        if(!data || data.length === 0) {
+            document.getElementById('removalsResults').innerHTML = '<div style="color:#94a3b8; text-align:center; padding:40px;">No data. Click "Move to Removals" in Report Builder first.</div>';
+            return;
+        }
+        
+        const visibleCols = removalsDisplayColumns.filter(col => visibleRemovalsColumns[col]);
+        if(visibleCols.length === 0) {
+            document.getElementById('removalsResults').innerHTML = '<div style="color:#94a3b8; text-align:center; padding:40px;">All columns hidden. Select columns to display.</div>';
+            return;
+        }
+        
+        let html = `<div style="overflow-x:auto;"><table id="removalsTable"><thead><tr>`;
+        for(const col of visibleCols) {
+            html += `<th onclick="sortRemovalsColumn('${col.replace(/'/g,"\\'")}')">
+                ${col}
+                <span style="font-size:0.6rem;">${removalsSortColumn === col ? (removalsSortDirection === 'asc' ? '↑' : '↓') : ''}</span>
+                <button class="remove-col" onclick="hideRemovalsColumn('${col.replace(/'/g,"\\'")}')">✗</button>
+            </th>`;
+        }
+        html += `</thead><tbody id="removalsTableBody"></tbody></table></div>`;
+        document.getElementById('removalsResults').innerHTML = html;
+        renderRemovalsTableBody(visibleCols);
+    }
+
+    function renderRemovalsTableBody(visibleCols) {
+        let filteredData = [...currentRemovalsData];
+        if(removalsSortColumn) {
+            filteredData.sort((a,b) => { let aVal = a[removalsSortColumn] || '', bVal = b[removalsSortColumn] || ''; return removalsSortDirection === 'asc' ? aVal.toString().localeCompare(bVal.toString()) : -aVal.toString().localeCompare(bVal.toString()); });
+        }
+        const tbody = document.getElementById('removalsTableBody');
+        if(!tbody) return;
+        tbody.innerHTML = '';
+        for(const row of filteredData.slice(0, 5000)) {
+            let tr = '<tr>';
+            for(const col of visibleCols) {
+                tr += `<td>${row[col] || '-'}</td>`;
+            }
+            tr += '</tr>';
+            tbody.innerHTML += tr;
+        }
+    }
+
+    function sortRemovalsColumn(col) {
+        if(removalsSortColumn === col) removalsSortDirection = removalsSortDirection === 'asc' ? 'desc' : 'asc';
+        else { removalsSortColumn = col; removalsSortDirection = 'asc'; }
+        const visibleCols = removalsDisplayColumns.filter(col => visibleRemovalsColumns[col]);
+        renderRemovalsTableBody(visibleCols);
+    }
+
+    function hideRemovalsColumn(colName) {
+        visibleRemovalsColumns[colName] = false;
+        const checkbox = document.querySelector(`.removals-col-select[data-col="${colName}"]`);
+        if(checkbox) {
+            checkbox.checked = false;
+            checkbox.closest('.col-checkbox')?.classList.remove('selected');
+        }
+        renderRemovalsTable();
+    }
+
+    function renderRemovalsReport() {
+        currentRemovalsData = generateRemovalsReport();
+        renderRemovalsTable();
+    }
+
+    function clearRemovalsTable() {
+        currentRemovalsData = [];
+        renderRemovalsTable();
+    }
+
+    async function moveToRemovals() {
+        if(!currentBuilderData.length) { alert("Generate a report first"); return; }
+        const removalsData = currentBuilderData.map(row => ({
+            'Return Date': row['Return Date'] || '-',
+            'Order ID': row['Order ID'] || '-',
+            'Merchant SKU': row['Merchant SKU'] || '-',
+            'ASIN': row['ASIN'] || '-',
+            'FNSKU': row['FNSKU'] || '-',
+            'Grade Changed FNSKU': row['Grade Changed FNSKU'] || '-',
+            'Detailed Disposition': row['Detailed Disposition'] || '-'
+        }));
+        await saveToDB('removalsBaseData', removalsData);
+        storedRemovalsBaseData = removalsData;
+        updateRemovalsDataStatus();
+        alert(`Moved ${removalsData.length} records to Removals.`);
+        renderRemovalsReport();
+    }
+
+    // Export Functions
+    function exportBuilderCSV() {
+        if(!currentBuilderData.length) { alert("Generate report first"); return; }
+        const visibleCols = builderDisplayColumns.filter(col => visibleBuilderColumns[col]);
+        const rows = currentBuilderData.map(row => visibleCols.map(h => `"${String(row[h] || '-').replace(/"/g, '""')}"`).join(','));
+        const csv = [visibleCols.join(','), ...rows].join('\n');
+        const blob = new Blob([csv], {type: 'text/csv'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `builder_report_${new Date().toISOString().slice(0,19)}.csv`;
+        a.click();
+    }
+
+    function exportRemovalsCSV() {
+        if(!currentRemovalsData.length) { alert("Generate report first"); return; }
+        const visibleCols = removalsDisplayColumns.filter(col => visibleRemovalsColumns[col]);
+        const rows = currentRemovalsData.map(row => visibleCols.map(h => `"${String(row[h] || '-').replace(/"/g, '""')}"`).join(','));
+        const csv = [visibleCols.join(','), ...rows].join('\n');
+        const blob = new Blob([csv], {type: 'text/csv'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `removals_report_${new Date().toISOString().slice(0,19)}.csv`;
+        a.click();
+    }
+
+    // Selection Panel Builders
+    function buildBuilderSelectionPanels() {
+        const container = document.getElementById('builderSelectionPanels');
+        let columnsHtml = `<div class="selection-panel"><div class="panel-header" onclick="togglePanel(this)">📋 SELECT COLUMNS TO DISPLAY (${builderDisplayColumns.length})</div><div class="panel-content"><div class="columns-grid">`;
+        for(const col of builderDisplayColumns) {
+            columnsHtml += `<label class="col-checkbox ${visibleBuilderColumns[col] ? 'selected' : ''}" data-col="${col}">
+                <input type="checkbox" class="builder-col-select" data-col="${col}" ${visibleBuilderColumns[col] ? 'checked' : ''} onchange="toggleBuilderColumn('${col}', this.checked)">
+                <span>${col}</span>
+            </label>`;
+        }
+        columnsHtml += `</div></div></div>`;
+        
+        const filtersHtml = `
+            <div class="selection-panel"><div class="panel-header" onclick="togglePanel(this)">🔧 1. Detailed Disposition</div><div class="panel-content"><div class="sub-grid">${detailedDispositions.map(d => `<label class="sub-checkbox"><input type="checkbox" value="${d}" class="disposition-filter" ${selectedDispositions.includes(d) ? 'checked' : ''}> ${d}</label>`).join('')}</div></div></div>
+            <div class="selection-panel"><div class="panel-header" onclick="togglePanel(this)">🏷️ 2. Grade Unit Status</div><div class="panel-content"><div class="sub-grid">${unitStatuses.map(s => `<label class="sub-checkbox"><input type="checkbox" value="${s}" class="unitstatus-filter" ${selectedUnitStatuses.includes(s) ? 'checked' : ''}> ${s}</label>`).join('')}</div></div></div>
+            <div class="selection-panel"><div class="panel-header" onclick="togglePanel(this)">⭐ 3. Grade Condition</div><div class="panel-content"><div class="sub-grid">${gradeConditions.map(c => `<label class="sub-checkbox"><input type="checkbox" value="${c}" class="gradecondition-filter" ${selectedGradeConditions.includes(c) ? 'checked' : ''}> ${c}</label>`).join('')}</div></div></div>
+            <div class="selection-panel"><div class="panel-header" onclick="togglePanel(this)">🔄 4. Return Status</div><div class="panel-content"><div class="sub-grid">${returnStatuses.map(s => `<label class="sub-checkbox"><input type="checkbox" value="${s}" class="returnstatus-filter" ${selectedReturnStatuses.includes(s) ? 'checked' : ''}> ${s}</label>`).join('')}</div></div></div>`;
+        container.innerHTML = columnsHtml + filtersHtml;
+        
+        document.querySelectorAll('.disposition-filter').forEach(cb => cb.addEventListener('change', () => selectedDispositions = Array.from(document.querySelectorAll('.disposition-filter:checked')).map(c=>c.value)));
+        document.querySelectorAll('.unitstatus-filter').forEach(cb => cb.addEventListener('change', () => selectedUnitStatuses = Array.from(document.querySelectorAll('.unitstatus-filter:checked')).map(c=>c.value)));
+        document.querySelectorAll('.gradecondition-filter').forEach(cb => cb.addEventListener('change', () => selectedGradeConditions = Array.from(document.querySelectorAll('.gradecondition-filter:checked')).map(c=>c.value)));
+        document.querySelectorAll('.returnstatus-filter').forEach(cb => cb.addEventListener('change', () => selectedReturnStatuses = Array.from(document.querySelectorAll('.returnstatus-filter:checked')).map(c=>c.value)));
+    }
+
+    function toggleBuilderColumn(colName, isChecked) {
+        visibleBuilderColumns[colName] = isChecked;
+        const label = document.querySelector(`.builder-col-select[data-col="${colName}"]`)?.closest('.col-checkbox');
+        if(label) isChecked ? label.classList.add('selected') : label.classList.remove('selected');
+        renderBuilderTable();
+    }
+
+    function buildRemovalsSelectionPanels() {
+        const container = document.getElementById('removalsSelectionPanels');
+        let columnsHtml = `<div class="selection-panel"><div class="panel-header" onclick="togglePanel(this)">📋 SELECT REMOVALS COLUMNS (${removalsDisplayColumns.length})</div><div class="panel-content"><div class="columns-grid">`;
+        for(const col of removalsDisplayColumns) {
+            columnsHtml += `<label class="col-checkbox ${visibleRemovalsColumns[col] ? 'selected' : ''}" data-col="${col}">
+                <input type="checkbox" class="removals-col-select" data-col="${col}" ${visibleRemovalsColumns[col] ? 'checked' : ''} onchange="toggleRemovalsColumn('${col}', this.checked)">
+                <span>${col}</span>
+            </label>`;
+        }
+        columnsHtml += `</div></div></div>`;
+        container.innerHTML = columnsHtml;
+    }
+
+    function toggleRemovalsColumn(colName, isChecked) {
+        visibleRemovalsColumns[colName] = isChecked;
+        const label = document.querySelector(`.removals-col-select[data-col="${colName}"]`)?.closest('.col-checkbox');
+        if(label) isChecked ? label.classList.add('selected') : label.classList.remove('selected');
+        renderRemovalsTable();
+    }
+
+    function buildRemovalsEventFilterPanel() {
+        const container = document.getElementById('removalsEventFilterPanel');
+        container.innerHTML = `<div class="event-filter-grid sub-grid">${allEventTypes.map(type => `<label class="sub-checkbox"><input type="checkbox" value="${type}" class="removals-event-filter" ${selectedEventTypes.includes(type) ? 'checked' : ''}> ${type}</label>`).join('')}</div>`;
+        document.querySelectorAll('.removals-event-filter').forEach(cb => {
+            cb.addEventListener('change', () => {
+                selectedEventTypes = Array.from(document.querySelectorAll('.removals-event-filter:checked')).map(c => c.value);
+                renderRemovalsReport();
+            });
+        });
+    }
+
+    function selectAllBuilderColumns() {
+        builderDisplayColumns.forEach(col => visibleBuilderColumns[col] = true);
+        document.querySelectorAll('.builder-col-select').forEach(cb => {
+            cb.checked = true;
+            cb.closest('.col-checkbox')?.classList.add('selected');
+        });
+        renderBuilderTable();
+    }
+
+    function deselectAllBuilderColumns() {
+        builderDisplayColumns.forEach(col => visibleBuilderColumns[col] = false);
+        document.querySelectorAll('.builder-col-select').forEach(cb => {
+            cb.checked = false;
+            cb.closest('.col-checkbox')?.classList.remove('selected');
+        });
+        renderBuilderTable();
+    }
+
+    function togglePanel(header) { const c = header.nextElementSibling; if(c) c.style.display = c.style.display === 'none' ? 'block' : 'none'; }
+    
+    // Admin Panel
+    function renderAdminPanel() {
+        let usersHtml = users.map(u => `<div class="user-row"><span><strong>${u.email}</strong> (${u.role})</span><div>${u.id === 1 ? '<span style="color:#666;">Cannot delete</span>' : `<button onclick="deleteUser(${u.id})">Delete</button>`}</div></div>`).join('');
+        return `<div class="admin-panel">
+            <h3>👑 Admin Panel</h3>
+            <div><input type="text" id="newUserEmail" placeholder="Username"><input type="password" id="newUserPassword" placeholder="Password"><select id="newUserRole"><option value="user">User</option><option value="admin">Admin</option></select><button onclick="addUser()">Add User</button></div>
+            <div id="usersList">${usersHtml}</div>
+            <hr><h4>🗑️ Data Management</h4>
+            <button id="clearAllDataBtn" class="btn-danger" style="margin-bottom: 16px;">⚠️ DELETE ALL UPLOADED DATA</button>
+            <hr><h4>🔌 SP-API Credentials</h4>
+            <div><input type="text" id="apiClientId" placeholder="Client ID"><input type="text" id="apiClientSecret" placeholder="Client Secret"><input type="text" id="apiRefreshToken" placeholder="Refresh Token"><input type="text" id="apiMarketplaceId" placeholder="Marketplace ID"><button onclick="saveApiCreds()">Save</button></div>
+        </div>`;
+    }
+
+    function addUser() {
+        const email = document.getElementById('newUserEmail')?.value, pwd = document.getElementById('newUserPassword')?.value, role = document.getElementById('newUserRole')?.value;
+        if(!email || !pwd) { alert("Email and password required"); return; }
+        if(users.find(u=>u.email===email)) { alert("User exists"); return; }
+        users.push({ id: Date.now(), email, password: pwd, name: email.split('@')[0], role });
+        saveUsers();
+        if(isAdmin) document.getElementById('adminView').innerHTML = renderAdminPanel();
+        alert(`User ${email} added`);
+    }
+    window.deleteUser = function(id) { if(id === 1) { alert("Cannot delete main admin"); return; } users = users.filter(u=>u.id!==id); saveUsers(); if(isAdmin) document.getElementById('adminView').innerHTML = renderAdminPanel(); alert("User deleted"); };
+    function saveApiCreds() { const creds = { clientId: document.getElementById('apiClientId')?.value, clientSecret: document.getElementById('apiClientSecret')?.value, refreshToken: document.getElementById('apiRefreshToken')?.value, marketplaceId: document.getElementById('apiMarketplaceId')?.value }; localStorage.setItem('fba_api', JSON.stringify(creds)); alert("Credentials saved"); }
+
+    function switchView(view) {
+        document.getElementById('builderView').style.display = view === 'builder' ? 'block' : 'none';
+        document.getElementById('removalsView').style.display = view === 'removals' ? 'block' : 'none';
+        document.getElementById('adminView').style.display = view === 'admin' ? 'block' : 'none';
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        if(view === 'builder') document.querySelector('[data-view="builder"]').classList.add('active');
+        else if(view === 'removals') document.querySelector('[data-view="removals"]').classList.add('active');
+        else if(view === 'admin') document.getElementById('adminBtn').classList.add('active');
+        if(view === 'admin' && isAdmin) document.getElementById('adminView').innerHTML = renderAdminPanel();
+        if(view === 'removals') renderRemovalsReport();
+    }
+
+    async function initApp() {
+        setupUploadZone();
+        buildBuilderSelectionPanels();
+        buildRemovalsSelectionPanels();
+        buildRemovalsEventFilterPanel();
+        await initIndexedDB();
+        
+        document.getElementById('generateBuilderReportBtn').onclick = renderBuilderReport;
+        document.getElementById('clearBuilderTableBtn').onclick = clearBuilderTable;
+        document.getElementById('moveToRemovalsBtn').onclick = moveToRemovals;
+        document.getElementById('exportBuilderCsvBtn').onclick = exportBuilderCSV;
+        document.getElementById('selectAllBuilderColsBtn').onclick = selectAllBuilderColumns;
+        document.getElementById('deselectAllBuilderColsBtn').onclick = deselectAllBuilderColumns;
+        document.getElementById('toggleRefundedNotReimbursedBtn').onclick = () => { showRefundedNotReimbursedOnly = !showRefundedNotReimbursedOnly; renderBuilderReport(); };
+        document.getElementById('toggleRpobFilterBtn').onclick = toggleRpobFilter;
+        document.getElementById('updateRemovalsReportBtn').onclick = renderRemovalsReport;
+        document.getElementById('clearRemovalsTableBtn').onclick = clearRemovalsTable;
+        document.getElementById('exportRemovalsCsvBtn').onclick = exportRemovalsCSV;
+        document.getElementById('adminBtn').onclick = () => switchView('admin');
+        
+        const clearAllBtn = document.getElementById('clearAllDataBtn');
+        if(clearAllBtn) clearAllBtn.onclick = clearAllData;
+        
+        document.querySelectorAll('[data-view]').forEach(btn => {
+            btn.addEventListener('click', () => switchView(btn.getAttribute('data-view')));
+        });
+        
+        const firstPanel = document.querySelector('.selection-panel .panel-header');
+        if(firstPanel) togglePanel(firstPanel);
+        
+        setTimeout(() => {
+            if(datasets.fbaReturns?.length || datasets.gradeResell?.length) renderBuilderReport();
+            if(storedRemovalsBaseData.length) renderRemovalsReport();
+        }, 500);
+    }
+    
+    window.togglePanel = togglePanel;
+    window.toggleBuilderColumn = toggleBuilderColumn;
+    window.toggleRemovalsColumn = toggleRemovalsColumn;
+    window.hideBuilderColumn = hideBuilderColumn;
+    window.hideRemovalsColumn = hideRemovalsColumn;
+    window.sortBuilderColumn = sortBuilderColumn;
+    window.sortRemovalsColumn = sortRemovalsColumn;
+</script>
+</body>
+</html>
