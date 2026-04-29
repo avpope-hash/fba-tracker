@@ -744,7 +744,7 @@
     builderDisplayColumns.forEach(col => visibleBuilderColumns[col] = true);
     removalsDisplayColumns.forEach(col => visibleRemovalsColumns[col] = true);
 
-    // Generate Builder Report
+    // Generate Builder Report - FIXED RP OB FILTER LOGIC
     function generateBuilderReport() {
         const searchTerm = document.getElementById('globalSearch')?.value.toLowerCase() || '';
         const returnsData = datasets.fbaReturns || [];
@@ -768,12 +768,34 @@
         });
         
         const results = [];
+        
+        // ===== FIXED: RP OB Filter logic - Returns Reconciliation EXCLUDED when filter is ENABLED =====
         const allOrderIds = new Set();
-        returnsData.forEach(row => { if(row['order-id']) allOrderIds.add(row['order-id'].toString().trim()); });
-        gradeData.forEach(row => { if(row['order-id']) allOrderIds.add(row['order-id'].toString().trim()); });
-        reconData.forEach(row => { if(row['Customer order ID']) allOrderIds.add(row['Customer order ID'].toString().trim()); });
+        
+        if(rpobFilterEnabled) {
+            // RP OB FILTER ENABLED: ONLY use FBA Returns AND Grade & Resell (NO Returns Reconciliation)
+            returnsData.forEach(row => { 
+                if(row['order-id']) allOrderIds.add(row['order-id'].toString().trim()); 
+            });
+            gradeData.forEach(row => { 
+                if(row['order-id']) allOrderIds.add(row['order-id'].toString().trim()); 
+            });
+            // Returns Reconciliation is EXCLUDED when filter is on
+        } else {
+            // RP OB FILTER DISABLED: Include all reports including Returns Reconciliation
+            returnsData.forEach(row => { 
+                if(row['order-id']) allOrderIds.add(row['order-id'].toString().trim()); 
+            });
+            gradeData.forEach(row => { 
+                if(row['order-id']) allOrderIds.add(row['order-id'].toString().trim()); 
+            });
+            reconData.forEach(row => { 
+                if(row['Customer order ID']) allOrderIds.add(row['Customer order ID'].toString().trim()); 
+            });
+        }
         
         for(const orderId of allOrderIds) {
+            // Apply RP OB filter: if enabled, ONLY keep orders that exist in RP OB report
             if(rpobFilterEnabled && !rpobOrderIds.has(orderId)) continue;
             
             const returnRow = returnsData.find(r => r['order-id']?.toString().trim() === orderId);
@@ -1035,7 +1057,7 @@
             return;
         }
         
-        let html = `<div style="overflow-x:auto;"><table id="builderTable"><thead></td>`;
+        let html = `<div style="overflow-x:auto;"><table id="builderTable"><thead><tr>`;
         for(const col of visibleCols) {
             html += `<th onclick="sortBuilderColumn('${col.replace(/'/g,"\\'")}')">
                 ${col}
@@ -1111,7 +1133,7 @@
             return;
         }
         
-        let html = `<div style="overflow-x:auto;"><table id="removalsTable"><thead><tr>`;
+        let html = `<div style="overflow-x:auto;"><table id="removalsTable"><thead></tr>`;
         for(const col of visibleCols) {
             html += `<th onclick="sortRemovalsColumn('${col.replace(/'/g,"\\'")}')">
                 ${col}
