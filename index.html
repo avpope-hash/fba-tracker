@@ -405,7 +405,7 @@
 
     // ========== INDEXEDDB ==========
     const DB_NAME = 'FBATracker';
-    const DB_VERSION = 4;
+    const DB_VERSION = 5;
     let db = null;
 
     let datasets = {
@@ -422,7 +422,9 @@
     const detailedDispositions = ["CARRIER_DAMAGED", "CUSTOMER_DAMAGED", "DEFECTIVE", "SELLABLE"];
     const unitStatuses = ["Failed", "Succeeded"];
     const gradeConditions = ["Used - Acceptable", "Used - Good", "Used - Like New", "Used - Poor", "Used - Very Good"];
+    // REFUND TRANSACTION TYPES - priority order (Refund types first)
     const refundTransactionTypes = ["Refund", "Chargeback Refund", "Refund_Retrocharge"];
+    const allTransactionPriority = [...refundTransactionTypes, "Order", "Adjustment", "Service Fee", "Transfer", "Amazon Fees", "FBA Inventory Fee"];
     const returnStatuses = ["Picked up from customer", "Return initiated", "In transit to Seller Flex node", "Return processed in FC", "Stop and return request by Amazon"];
     const allEventTypes = ["Adjustments", "VendorReturns", "CustomerReturns", "Receipts", "Shipments", "Whsetransfers"];
     let selectedEventTypes = [...allEventTypes];
@@ -471,6 +473,25 @@
         const match2 = sku.match(/amzn\.gr\.([A-Z0-9]+)-/i);
         if(match2) return match2[1];
         return sku;
+    }
+
+    // Get the best transaction type (prioritize Refund types)
+    function getBestTransactionType(transactions) {
+        if(!transactions || transactions.length === 0) return '-';
+        
+        // First, look for any refund transaction type
+        for(const refundType of refundTransactionTypes) {
+            const found = transactions.find(t => t.type === refundType);
+            if(found) return found.type;
+        }
+        // If no refund, return the first transaction type
+        return transactions[0]?.type || '-';
+    }
+
+    // Get hasRefund status (true if ANY refund transaction exists)
+    function hasRefundTransaction(transactions) {
+        if(!transactions || transactions.length === 0) return false;
+        return transactions.some(t => refundTransactionTypes.includes(t.type));
     }
 
     function initIndexedDB() {
@@ -732,6 +753,20 @@
         const repoData = datasets.reportsRepo || [];
         const reconData = datasets.returnsReconciliation || [];
         
+        // Build map of all transactions per order ID for Reports Repository
+        const repoTransactionsMap = new Map();
+        repoData.forEach(row => {
+            const orderId = row['order id']?.toString().trim();
+            if(orderId) {
+                if(!repoTransactionsMap.has(orderId)) repoTransactionsMap.set(orderId, []);
+                repoTransactionsMap.get(orderId).push({
+                    type: row['type'] || '',
+                    total: row['total'] || '',
+                    status: row['Transaction status'] || ''
+                });
+            }
+        });
+        
         const results = [];
         const allOrderIds = new Set();
         returnsData.forEach(row => { if(row['order-id']) allOrderIds.add(row['order-id'].toString().trim()); });
@@ -744,8 +779,13 @@
             const returnRow = returnsData.find(r => r['order-id']?.toString().trim() === orderId);
             const gradeRow = gradeData.find(r => r['order-id']?.toString().trim() === orderId);
             const reimbRow = reimbData.find(r => r['amazon-order-id']?.toString().trim() === orderId);
-            const repoRow = repoData.find(r => r['order id']?.toString().trim() === orderId);
             const reconRow = reconData.find(r => r['Customer order ID']?.toString().trim() === orderId);
+            
+            // Get all transactions for this order ID from Reports Repository
+            const repoTransactions = repoTransactionsMap.get(orderId) || [];
+            const repoTransactionType = getBestTransactionType(repoTransactions);
+            const hasRefund = hasRefundTransaction(repoTransactions);
+            const hasReimbursement = !!reimbRow;
             
             const disposition = returnRow ? returnRow['detailed-disposition'] : '';
             if(!selectedDispositions.includes(disposition) && selectedDispositions.length > 0 && returnRow) continue;
@@ -757,9 +797,6 @@
             const returnStatus = reconRow ? reconRow['Return status'] : '';
             if(!selectedReturnStatuses.includes(returnStatus) && selectedReturnStatuses.length > 0 && reconRow) continue;
             
-            const transactionType = repoRow ? repoRow['type'] : '';
-            const hasRefund = repoRow && refundTransactionTypes.includes(transactionType);
-            const hasReimbursement = !!reimbRow;
             if(showRefundedNotReimbursedOnly && !(hasRefund && !hasReimbursement)) continue;
             
             if(searchTerm && !orderId.toLowerCase().includes(searchTerm) && 
@@ -792,7 +829,7 @@
             row['Grade Unit Status'] = unitStatus || '-';
             row['Grade Condition'] = gradeCondition || '-';
             row['Reimbursement ID'] = reimbRow?.['reimbursement-id'] || '-';
-            row['Repo Transaction Type'] = transactionType || '-';
+            row['Repo Transaction Type'] = repoTransactionType;
             row['Recon Return Status'] = returnStatus || '-';
             row['Recon Days In-transit'] = reconRow?.['Days In-transit'] || '-';
             row['Has Refund in Repo?'] = hasRefund ? 'YES' : 'NO';
@@ -998,7 +1035,7 @@
             return;
         }
         
-        let html = `<div style="overflow-x:auto;"><table id="builderTable"><thead><tr>`;
+        let html = `<div style="overflow-x:auto;"><table id="builderTable"><thead></td>`;
         for(const col of visibleCols) {
             html += `<th onclick="sortBuilderColumn('${col.replace(/'/g,"\\'")}')">
                 ${col}
