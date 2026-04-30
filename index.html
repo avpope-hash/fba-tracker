@@ -475,17 +475,17 @@
         return sku;
     }
 
-    // Get the best transaction type (prioritize Refund types)
-    function getBestTransactionType(transactions) {
-        if(!transactions || transactions.length === 0) return '-';
+    // Get the best transaction type AND its date (prioritize Refund types)
+    function getBestTransactionWithDate(transactions) {
+        if(!transactions || transactions.length === 0) return { type: '-', date: '-' };
         
         // First, look for any refund transaction type
         for(const refundType of refundTransactionTypes) {
             const found = transactions.find(t => t.type === refundType);
-            if(found) return found.type;
+            if(found) return { type: found.type, date: found.date };
         }
-        // If no refund, return the first transaction type
-        return transactions[0]?.type || '-';
+        // If no refund, return the first transaction's type and date
+        return { type: transactions[0]?.type || '-', date: transactions[0]?.date || '-' };
     }
 
     // Get hasRefund status (true if ANY refund transaction exists)
@@ -720,10 +720,10 @@
         };
     }
 
-    // Builder Display Columns
+    // Builder Display Columns - ADDED Repo Transaction Date
     const builderDisplayColumns = [
         'Return Date', 'Order ID', 'Merchant SKU', 'ASIN', 'FNSKU', 'Grade Changed FNSKU', 'Detailed Disposition',
-        'Grade Unit Status', 'Grade Condition', 'Reimbursement ID', 'Repo Transaction Type',
+        'Grade Unit Status', 'Grade Condition', 'Reimbursement ID', 'Repo Transaction Type', 'Repo Transaction Date',
         'Recon Return Status', 'Recon Days In-transit', 'Has Refund in Repo?', 'Has Reimbursement?',
         'In FBA Returns?', 'In Grade & Resell?', 'In Returns Reconciliation?', 'Status'
     ];
@@ -744,7 +744,7 @@
     builderDisplayColumns.forEach(col => visibleBuilderColumns[col] = true);
     removalsDisplayColumns.forEach(col => visibleRemovalsColumns[col] = true);
 
-    // Generate Builder Report - FIXED RP OB FILTER LOGIC
+    // Generate Builder Report - FIXED RP OB FILTER LOGIC WITH TRANSACTION DATE
     function generateBuilderReport() {
         const searchTerm = document.getElementById('globalSearch')?.value.toLowerCase() || '';
         const returnsData = datasets.fbaReturns || [];
@@ -753,7 +753,7 @@
         const repoData = datasets.reportsRepo || [];
         const reconData = datasets.returnsReconciliation || [];
         
-        // Build map of all transactions per order ID for Reports Repository
+        // Build map of all transactions per order ID for Reports Repository (including type AND date)
         const repoTransactionsMap = new Map();
         repoData.forEach(row => {
             const orderId = row['order id']?.toString().trim();
@@ -761,6 +761,7 @@
                 if(!repoTransactionsMap.has(orderId)) repoTransactionsMap.set(orderId, []);
                 repoTransactionsMap.get(orderId).push({
                     type: row['type'] || '',
+                    date: row['date/time'] || '',
                     total: row['total'] || '',
                     status: row['Transaction status'] || ''
                 });
@@ -805,7 +806,9 @@
             
             // Get all transactions for this order ID from Reports Repository
             const repoTransactions = repoTransactionsMap.get(orderId) || [];
-            const repoTransactionType = getBestTransactionType(repoTransactions);
+            const bestTransaction = getBestTransactionWithDate(repoTransactions);
+            const repoTransactionType = bestTransaction.type;
+            const repoTransactionDate = bestTransaction.date;
             const hasRefund = hasRefundTransaction(repoTransactions);
             const hasReimbursement = !!reimbRow;
             
@@ -852,6 +855,7 @@
             row['Grade Condition'] = gradeCondition || '-';
             row['Reimbursement ID'] = reimbRow?.['reimbursement-id'] || '-';
             row['Repo Transaction Type'] = repoTransactionType;
+            row['Repo Transaction Date'] = formatDate(repoTransactionDate);
             row['Recon Return Status'] = returnStatus || '-';
             row['Recon Days In-transit'] = reconRow?.['Days In-transit'] || '-';
             row['Has Refund in Repo?'] = hasRefund ? 'YES' : 'NO';
@@ -1133,7 +1137,7 @@
             return;
         }
         
-        let html = `<div style="overflow-x:auto;"><table id="removalsTable"><thead></tr>`;
+        let html = `<div style="overflow-x:auto;"><table id="removalsTable"><thead></table>`;
         for(const col of visibleCols) {
             html += `<th onclick="sortRemovalsColumn('${col.replace(/'/g,"\\'")}')">
                 ${col}
@@ -1159,7 +1163,7 @@
             for(const col of visibleCols) {
                 tr += `<td>${row[col] || '-'}</td>`;
             }
-            tr += '</tr>';
+            tr += '</table>';
             tbody.innerHTML += tr;
         }
     }
