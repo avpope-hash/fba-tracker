@@ -475,7 +475,20 @@
         return sku;
     }
 
-    // Get the best transaction type AND its date (prioritize Refund types)
+    // Get the best transaction type (prioritize Refund types)
+    function getBestTransactionType(transactions) {
+        if(!transactions || transactions.length === 0) return '-';
+        
+        // First, look for any refund transaction type
+        for(const refundType of refundTransactionTypes) {
+            const found = transactions.find(t => t.type === refundType);
+            if(found) return found.type;
+        }
+        // If no refund, return the first transaction type
+        return transactions[0]?.type || '-';
+    }
+
+    // NEW: Get best transaction with its date
     function getBestTransactionWithDate(transactions) {
         if(!transactions || transactions.length === 0) return { type: '-', date: '-' };
         
@@ -744,7 +757,7 @@
     builderDisplayColumns.forEach(col => visibleBuilderColumns[col] = true);
     removalsDisplayColumns.forEach(col => visibleRemovalsColumns[col] = true);
 
-    // Generate Builder Report - FIXED RP OB FILTER LOGIC WITH TRANSACTION DATE
+    // Generate Builder Report - FIXED RP OB FILTER LOGIC WITH TRANSACTION DATE ADDED
     function generateBuilderReport() {
         const searchTerm = document.getElementById('globalSearch')?.value.toLowerCase() || '';
         const returnsData = datasets.fbaReturns || [];
@@ -753,7 +766,7 @@
         const repoData = datasets.reportsRepo || [];
         const reconData = datasets.returnsReconciliation || [];
         
-        // Build map of all transactions per order ID for Reports Repository (including type AND date)
+        // Build map of all transactions per order ID for Reports Repository (NOW WITH DATE)
         const repoTransactionsMap = new Map();
         repoData.forEach(row => {
             const orderId = row['order id']?.toString().trim();
@@ -804,7 +817,7 @@
             const reimbRow = reimbData.find(r => r['amazon-order-id']?.toString().trim() === orderId);
             const reconRow = reconData.find(r => r['Customer order ID']?.toString().trim() === orderId);
             
-            // Get all transactions for this order ID from Reports Repository
+            // Get all transactions for this order ID from Reports Repository - NOW WITH DATE
             const repoTransactions = repoTransactionsMap.get(orderId) || [];
             const bestTransaction = getBestTransactionWithDate(repoTransactions);
             const repoTransactionType = bestTransaction.type;
@@ -875,7 +888,7 @@
         return results;
     }
 
-    // Generate Removals Report with full matching
+    // Generate Removals Report with full matching - UNCHANGED, WORKING PERFECTLY
     function generateRemovalsReport() {
         if(storedRemovalsBaseData.length === 0) return [];
         
@@ -1061,7 +1074,7 @@
             return;
         }
         
-        let html = `<div style="overflow-x:auto;"><table id="builderTable"><thead><tr>`;
+        let html = `<div style="overflow-x:auto;"><table id="builderTable"><thead></tr>`;
         for(const col of visibleCols) {
             html += `<th onclick="sortBuilderColumn('${col.replace(/'/g,"\\'")}')">
                 ${col}
@@ -1137,7 +1150,7 @@
             return;
         }
         
-        let html = `<div style="overflow-x:auto;"><table id="removalsTable"><thead></table>`;
+        let html = `<div style="overflow-x:auto;"><table id="removalsTable"><thead><tr>`;
         for(const col of visibleCols) {
             html += `<th onclick="sortRemovalsColumn('${col.replace(/'/g,"\\'")}')">
                 ${col}
@@ -1163,7 +1176,7 @@
             for(const col of visibleCols) {
                 tr += `<td>${row[col] || '-'}</td>`;
             }
-            tr += '</table>';
+            tr += '</tr>';
             tbody.innerHTML += tr;
         }
     }
