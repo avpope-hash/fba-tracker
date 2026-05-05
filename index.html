@@ -239,6 +239,15 @@
             font-size: 0.6rem;
             color: white;
         }
+        th .drag-handle {
+            cursor: grab;
+            margin-right: 6px;
+            font-size: 0.8rem;
+            user-select: none;
+        }
+        th .drag-handle:active { cursor: grabbing; }
+        th.drag-over { background: #f59e0b; color: #0f172a; }
+        
         .status-refunded-not-reimbursed { background: #ef4444; color: white; display: inline-block; padding: 2px 8px; border-radius: 20px; }
         .status-reimbursed { background: #10b981; color: white; display: inline-block; padding: 2px 8px; border-radius: 20px; }
         .status-no-refund { background: #f59e0b; color: #0f172a; display: inline-block; padding: 2px 8px; border-radius: 20px; }
@@ -310,7 +319,10 @@
             <div id="rpobFilterStatus" class="data-status" style="display:none;">
                 <span>📋 RP OB Report Filter: <strong id="rpobCount">0</strong> Order IDs loaded</span>
                 <span id="rpobActiveBadge" class="status-inactive">Filter Inactive</span>
-                <button id="toggleRpobFilterBtn" class="btn-secondary" style="padding: 4px 16px;">Enable Filter</button>
+                <div style="display: flex; gap: 8px;">
+                    <button id="toggleRpobFilterBtn" class="btn-secondary" style="padding: 4px 16px;">Enable Filter</button>
+                    <button id="clearRpobDataBtn" class="btn-danger" style="padding: 4px 16px;">🗑️ Clear RP OB Data</button>
+                </div>
             </div>
 
             <div id="builderSelectionPanels"></div>
@@ -351,6 +363,7 @@
                 <button id="updateRemovalsReportBtn" class="btn-primary">🔄 Update Report</button>
                 <button id="clearRemovalsTableBtn" class="btn-warning">🗑️ Clear Table</button>
                 <button id="exportRemovalsCsvBtn" class="btn-success">📎 Export CSV</button>
+                <button id="resetRemovalsColOrderBtn" class="btn-secondary">↺ Reset Column Order</button>
             </div>
 
             <div id="removalsSelectionPanels"></div>
@@ -405,7 +418,7 @@
 
     // ========== INDEXEDDB ==========
     const DB_NAME = 'FBATracker';
-    const DB_VERSION = 5;
+    const DB_VERSION = 6;
     let db = null;
 
     let datasets = {
@@ -422,11 +435,10 @@
     const detailedDispositions = ["CARRIER_DAMAGED", "CUSTOMER_DAMAGED", "DEFECTIVE", "SELLABLE"];
     const unitStatuses = ["Failed", "Succeeded"];
     const gradeConditions = ["Used - Acceptable", "Used - Good", "Used - Like New", "Used - Poor", "Used - Very Good"];
-    // REFUND TRANSACTION TYPES - priority order (Refund types first)
     const refundTransactionTypes = ["Refund", "Chargeback Refund", "Refund_Retrocharge"];
-    const allTransactionPriority = [...refundTransactionTypes, "Order", "Adjustment", "Service Fee", "Transfer", "Amazon Fees", "FBA Inventory Fee"];
     const returnStatuses = ["Picked up from customer", "Return initiated", "In transit to Seller Flex node", "Return processed in FC", "Stop and return request by Amazon"];
-    const allEventTypes = ["Adjustments", "VendorReturns", "CustomerReturns", "Receipts", "Shipments", "Whsetransfers"];
+    // FIXED: Removed "Receipts" and "Shipments" - only these 4 event types
+    const allEventTypes = ["Adjustments", "VendorReturns", "CustomerReturns", "Whsetransfers"];
     let selectedEventTypes = [...allEventTypes];
     let selectedDispositions = [...detailedDispositions];
     let selectedUnitStatuses = [...unitStatuses];
@@ -434,15 +446,17 @@
     let selectedReturnStatuses = [...returnStatuses];
     let showRefundedNotReimbursedOnly = false;
     
-    // Column visibility state
+    // Column visibility and order state
     let visibleBuilderColumns = {};
     let visibleRemovalsColumns = {};
+    let removalsColumnOrder = [];
     let currentBuilderData = [];
     let currentRemovalsData = [];
     let builderSortColumn = null;
     let builderSortDirection = 'asc';
     let removalsSortColumn = null;
     let removalsSortDirection = 'asc';
+    let dragStartIndex = null;
 
     // Helper functions
     function formatDate(dateStr) {
@@ -475,36 +489,49 @@
         return sku;
     }
 
-    // Get the best transaction type (prioritize Refund types)
-    function getBestTransactionType(transactions) {
-        if(!transactions || transactions.length === 0) return '-';
-        
-        // First, look for any refund transaction type
-        for(const refundType of refundTransactionTypes) {
-            const found = transactions.find(t => t.type === refundType);
-            if(found) return found.type;
-        }
-        // If no refund, return the first transaction type
-        return transactions[0]?.type || '-';
-    }
-
-    // NEW: Get best transaction with its date
     function getBestTransactionWithDate(transactions) {
         if(!transactions || transactions.length === 0) return { type: '-', date: '-' };
-        
-        // First, look for any refund transaction type
         for(const refundType of refundTransactionTypes) {
             const found = transactions.find(t => t.type === refundType);
             if(found) return { type: found.type, date: found.date };
         }
-        // If no refund, return the first transaction's type and date
         return { type: transactions[0]?.type || '-', date: transactions[0]?.date || '-' };
     }
 
-    // Get hasRefund status (true if ANY refund transaction exists)
     function hasRefundTransaction(transactions) {
         if(!transactions || transactions.length === 0) return false;
         return transactions.some(t => refundTransactionTypes.includes(t.type));
+    }
+
+    // Calculate match score for removal order (higher = better match)
+    function calculateMatchScore(order, returnDateObj, merchantSku, matchFnsku, asin) {
+        let score = 0;
+        
+        // Date proximity (most important)
+        if(returnDateObj && order['request-date']) {
+            const orderDate = new Date(order['request-date']);
+            if(!isNaN(orderDate.getTime())) {
+                const daysDiff = Math.abs(orderDate - returnDateObj) / (1000 * 60 * 60 * 24);
+                if(daysDiff <= 30) score += 100 - daysDiff;
+                else if(daysDiff <= 90) score += 50 - (daysDiff - 30);
+            }
+        }
+        
+        // SKU match
+        const orderSku = order['sku']?.toString().trim() || '';
+        const normalizedOrderSku = normalizeMerchantSku(orderSku);
+        const normalizedMerchantSku = normalizeMerchantSku(merchantSku);
+        if(orderSku === merchantSku) score += 50;
+        else if(normalizedOrderSku === normalizedMerchantSku && normalizedMerchantSku) score += 40;
+        
+        // FNSKU match
+        const orderFnsku = order['fnsku']?.toString().trim() || '';
+        if(orderFnsku === matchFnsku && matchFnsku !== '-') score += 50;
+        
+        // ASIN match (if available in order)
+        if(asin && orderFnsku) score += 10;
+        
+        return score;
     }
 
     function initIndexedDB() {
@@ -518,6 +545,7 @@
                     if (!db_.objectStoreNames.contains(storeName)) db_.createObjectStore(storeName);
                 });
                 if (!db_.objectStoreNames.contains('removalsBaseData')) db_.createObjectStore('removalsBaseData');
+                if (!db_.objectStoreNames.contains('removalsColumnOrder')) db_.createObjectStore('removalsColumnOrder');
             };
         });
     }
@@ -540,6 +568,17 @@
         });
     }
 
+    async function clearRpobData() {
+        if(!confirm("⚠️ Clear RP OB Report data? This removes the uploaded RP OB file.")) return;
+        await saveToDB('rpobReport', []);
+        datasets.rpobReport = [];
+        rpobOrderIds.clear();
+        updateRpobFilterSet();
+        updateRpobFilterUI();
+        renderBuilderReport();
+        alert("RP OB Report data cleared");
+    }
+
     async function clearAllData() {
         if(!confirm("⚠️ WARNING: This will delete ALL uploaded data. Are you sure?")) return;
         for(const storeName of Object.keys(REPORT_HEADERS)) {
@@ -560,8 +599,27 @@
             if(reportType === 'rpobReport') updateRpobFilterSet();
         }
         storedRemovalsBaseData = await loadFromDB('removalsBaseData');
+        
+        // Load saved column order
+        const savedOrder = await loadFromDB('removalsColumnOrder');
+        if(savedOrder && savedOrder.length > 0) {
+            removalsColumnOrder = savedOrder;
+        } else {
+            removalsColumnOrder = [...removalsDisplayColumns];
+        }
+        
         updateRemovalsDataStatus();
         updateRpobFilterUI();
+    }
+
+    async function saveRemovalsColumnOrder() {
+        await saveToDB('removalsColumnOrder', removalsColumnOrder);
+    }
+
+    function resetRemovalsColumnOrder() {
+        removalsColumnOrder = [...removalsDisplayColumns];
+        saveRemovalsColumnOrder();
+        renderRemovalsTable();
     }
 
     function updateRpobFilterSet() {
@@ -713,7 +771,6 @@
         if(datasets.inventoryLedger?.length || datasets.removalOrder?.length) renderRemovalsReport();
     }
 
-    // Setup upload zone
     function setupUploadZone() {
         const zone = document.getElementById('uploadZone');
         const fileInput = document.getElementById('fileInput');
@@ -733,7 +790,7 @@
         };
     }
 
-    // Builder Display Columns - ADDED Repo Transaction Date
+    // Builder Display Columns
     const builderDisplayColumns = [
         'Return Date', 'Order ID', 'Merchant SKU', 'ASIN', 'FNSKU', 'Grade Changed FNSKU', 'Detailed Disposition',
         'Grade Unit Status', 'Grade Condition', 'Reimbursement ID', 'Repo Transaction Type', 'Repo Transaction Date',
@@ -744,6 +801,9 @@
     // Removals Display Columns
     const removalsDisplayColumns = [
         'Return Date', 'Order ID', 'ASIN', 'FNSKU', 'Grade Changed FNSKU', 'Merchant SKU', 'Detailed Disposition',
+        'Grade Unit Status', 'Grade Condition', 'Reimbursement ID', 'Repo Transaction Type', 'Repo Transaction Date',
+        'Recon Return Status', 'Recon Days In-transit', 'Has Refund in Repo?', 'Has Reimbursement?',
+        'In FBA Returns?', 'In Grade & Resell?', 'In Returns Reconciliation?', 'Status',
         'Event Type 1', 'Quantity 1', 'Event Date 1', 'Reference ID 1',
         'Event Type 2', 'Quantity 2', 'Event Date 2', 'Reference ID 2',
         'Event Type 3', 'Quantity 3', 'Event Date 3', 'Reference ID 3',
@@ -757,7 +817,7 @@
     builderDisplayColumns.forEach(col => visibleBuilderColumns[col] = true);
     removalsDisplayColumns.forEach(col => visibleRemovalsColumns[col] = true);
 
-    // Generate Builder Report - FIXED RP OB FILTER LOGIC WITH TRANSACTION DATE ADDED
+    // Generate Builder Report
     function generateBuilderReport() {
         const searchTerm = document.getElementById('globalSearch')?.value.toLowerCase() || '';
         const returnsData = datasets.fbaReturns || [];
@@ -766,7 +826,6 @@
         const repoData = datasets.reportsRepo || [];
         const reconData = datasets.returnsReconciliation || [];
         
-        // Build map of all transactions per order ID for Reports Repository (NOW WITH DATE)
         const repoTransactionsMap = new Map();
         repoData.forEach(row => {
             const orderId = row['order id']?.toString().trim();
@@ -782,34 +841,18 @@
         });
         
         const results = [];
-        
-        // ===== FIXED: RP OB Filter logic - Returns Reconciliation EXCLUDED when filter is ENABLED =====
         const allOrderIds = new Set();
         
         if(rpobFilterEnabled) {
-            // RP OB FILTER ENABLED: ONLY use FBA Returns AND Grade & Resell (NO Returns Reconciliation)
-            returnsData.forEach(row => { 
-                if(row['order-id']) allOrderIds.add(row['order-id'].toString().trim()); 
-            });
-            gradeData.forEach(row => { 
-                if(row['order-id']) allOrderIds.add(row['order-id'].toString().trim()); 
-            });
-            // Returns Reconciliation is EXCLUDED when filter is on
+            returnsData.forEach(row => { if(row['order-id']) allOrderIds.add(row['order-id'].toString().trim()); });
+            gradeData.forEach(row => { if(row['order-id']) allOrderIds.add(row['order-id'].toString().trim()); });
         } else {
-            // RP OB FILTER DISABLED: Include all reports including Returns Reconciliation
-            returnsData.forEach(row => { 
-                if(row['order-id']) allOrderIds.add(row['order-id'].toString().trim()); 
-            });
-            gradeData.forEach(row => { 
-                if(row['order-id']) allOrderIds.add(row['order-id'].toString().trim()); 
-            });
-            reconData.forEach(row => { 
-                if(row['Customer order ID']) allOrderIds.add(row['Customer order ID'].toString().trim()); 
-            });
+            returnsData.forEach(row => { if(row['order-id']) allOrderIds.add(row['order-id'].toString().trim()); });
+            gradeData.forEach(row => { if(row['order-id']) allOrderIds.add(row['order-id'].toString().trim()); });
+            reconData.forEach(row => { if(row['Customer order ID']) allOrderIds.add(row['Customer order ID'].toString().trim()); });
         }
         
         for(const orderId of allOrderIds) {
-            // Apply RP OB filter: if enabled, ONLY keep orders that exist in RP OB report
             if(rpobFilterEnabled && !rpobOrderIds.has(orderId)) continue;
             
             const returnRow = returnsData.find(r => r['order-id']?.toString().trim() === orderId);
@@ -817,7 +860,6 @@
             const reimbRow = reimbData.find(r => r['amazon-order-id']?.toString().trim() === orderId);
             const reconRow = reconData.find(r => r['Customer order ID']?.toString().trim() === orderId);
             
-            // Get all transactions for this order ID from Reports Repository - NOW WITH DATE
             const repoTransactions = repoTransactionsMap.get(orderId) || [];
             const bestTransaction = getBestTransactionWithDate(repoTransactions);
             const repoTransactionType = bestTransaction.type;
@@ -888,240 +930,248 @@
         return results;
     }
 
-   // Generate Removals Report with DATE PROXIMITY matching
-function generateRemovalsReport() {
-    if(storedRemovalsBaseData.length === 0) return [];
-    
-    const inventoryData = datasets.inventoryLedger || [];
-    const removalOrderData = datasets.removalOrder || [];
-    const removalShipmentData = datasets.removalShipment || [];
-    const searchTerm = document.getElementById('removalsGlobalSearch')?.value.toLowerCase() || '';
-    
-    // Build inventory lookup by FNSKU + ASIN + MSKU
-    const inventoryByKey = new Map();
-    inventoryData.forEach(inv => {
-        const fnsku = inv['FNSKU']?.toString().trim() || '';
-        const asin = inv['ASIN']?.toString().trim() || '';
-        const msku = inv['MSKU']?.toString().trim() || '';
-        if(fnsku && asin) {
-            const key = `${fnsku}|${asin}`;
-            if(!inventoryByKey.has(key)) inventoryByKey.set(key, []);
-            inventoryByKey.get(key).push(inv);
-            
-            if(msku) {
-                const mskuKey = `${msku}|${asin}`;
-                if(!inventoryByKey.has(mskuKey)) inventoryByKey.set(mskuKey, []);
-                inventoryByKey.get(mskuKey).push(inv);
+    // Generate Removals Report with SCORE-BASED matching
+    function generateRemovalsReport() {
+        if(storedRemovalsBaseData.length === 0) return [];
+        
+        const inventoryData = datasets.inventoryLedger || [];
+        const removalOrderData = datasets.removalOrder || [];
+        const removalShipmentData = datasets.removalShipment || [];
+        const searchTerm = document.getElementById('removalsGlobalSearch')?.value.toLowerCase() || '';
+        
+        // Build inventory lookup by FNSKU + ASIN + MSKU
+        const inventoryByKey = new Map();
+        inventoryData.forEach(inv => {
+            const fnsku = inv['FNSKU']?.toString().trim() || '';
+            const asin = inv['ASIN']?.toString().trim() || '';
+            const msku = inv['MSKU']?.toString().trim() || '';
+            if(fnsku && asin) {
+                const key = `${fnsku}|${asin}`;
+                if(!inventoryByKey.has(key)) inventoryByKey.set(key, []);
+                inventoryByKey.get(key).push(inv);
+                
+                if(msku) {
+                    const mskuKey = `${msku}|${asin}`;
+                    if(!inventoryByKey.has(mskuKey)) inventoryByKey.set(mskuKey, []);
+                    inventoryByKey.get(mskuKey).push(inv);
+                }
             }
-        }
-    });
-    
-    // Sort inventory entries by date
-    for(const [key, entries] of inventoryByKey.entries()) {
-        entries.sort((a, b) => {
-            const dateA = new Date(a['Date'] || a['Date and Time'] || 0);
-            const dateB = new Date(b['Date'] || b['Date and Time'] || 0);
-            return dateA - dateB;
         });
-    }
-    
-    const results = [];
-    const MAX_EVENTS = 5;
-    
-    for(const baseRow of storedRemovalsBaseData) {
-        const returnDateDisplay = baseRow['Return Date'] || '-';
-        const orderId = baseRow['Order ID'] || '-';
-        const asin = baseRow['ASIN'] || '-';
-        const fnsku = baseRow['FNSKU'] || '-';
-        const gradeChangedFnsku = baseRow['Grade Changed FNSKU'] || '-';
-        const merchantSku = baseRow['Merchant SKU'] || '-';
-        const detailedDisposition = baseRow['Detailed Disposition'] || '-';
         
-        // Use Grade Changed FNSKU for matching if available, otherwise original FNSKU
-        const matchFnsku = (gradeChangedFnsku && gradeChangedFnsku !== '-') ? gradeChangedFnsku : fnsku;
-        const returnDateObj = getCleanReturnDate(returnDateDisplay);
-        
-        // Find matching inventory entries
-        let inventoryEntries = [];
-        const key1 = `${matchFnsku}|${asin}`;
-        const key2 = `${merchantSku}|${asin}`;
-        
-        let matches = inventoryByKey.get(key1) || [];
-        if(matches.length === 0 && merchantSku !== '-') {
-            matches = inventoryByKey.get(key2) || [];
+        for(const [key, entries] of inventoryByKey.entries()) {
+            entries.sort((a, b) => {
+                const dateA = new Date(a['Date'] || a['Date and Time'] || 0);
+                const dateB = new Date(b['Date'] || b['Date and Time'] || 0);
+                return dateA - dateB;
+            });
         }
         
-        if(matches.length > 0 && returnDateObj) {
-            const entriesWithDistance = matches.map(inv => {
-                const invDate = new Date(inv['Date'] || inv['Date and Time'] || 0);
-                const distance = Math.abs(invDate - returnDateObj);
-                return { inv, invDate, distance };
-            });
-            entriesWithDistance.sort((a, b) => a.distance - b.distance);
-            const closestDate = entriesWithDistance[0].invDate;
-            inventoryEntries = matches.filter(inv => {
-                const invDate = new Date(inv['Date'] || inv['Date and Time'] || 0);
-                return invDate.toDateString() === closestDate.toDateString();
-            });
-        } else if(matches.length > 0) {
-            inventoryEntries = matches;
-        }
+        const results = [];
+        const MAX_EVENTS = 5;
         
-        // Filter by selected event types
-        inventoryEntries = inventoryEntries.filter(inv => selectedEventTypes.includes(inv['Event Type']));
-        
-        // Create base row
-        const row = {
-            'Return Date': returnDateDisplay,
-            'Order ID': orderId,
-            'ASIN': asin,
-            'FNSKU': fnsku,
-            'Grade Changed FNSKU': gradeChangedFnsku,
-            'Merchant SKU': merchantSku,
-            'Detailed Disposition': detailedDisposition
-        };
-        
-        // Add Reimbursement ID and Repo data from baseRow (passed from builder)
-        row['Reimbursement ID'] = baseRow['Reimbursement ID'] || '-';
-        row['Repo Transaction Type'] = baseRow['Repo Transaction Type'] || '-';
-        row['Repo Transaction Date'] = baseRow['Repo Transaction Date'] || '-';
-        row['Recon Return Status'] = baseRow['Recon Return Status'] || '-';
-        row['Recon Days In-transit'] = baseRow['Recon Days In-transit'] || '-';
-        row['Has Refund in Repo?'] = baseRow['Has Refund in Repo?'] || '-';
-        row['Has Reimbursement?'] = baseRow['Has Reimbursement?'] || '-';
-        row['In FBA Returns?'] = baseRow['In FBA Returns?'] || '-';
-        row['In Grade & Resell?'] = baseRow['In Grade & Resell?'] || '-';
-        row['In Returns Reconciliation?'] = baseRow['In Returns Reconciliation?'] || '-';
-        row['Status'] = baseRow['Status'] || '-';
-        
-        // Add inventory event columns
-        for(let i = 0; i < MAX_EVENTS; i++) {
-            const event = inventoryEntries[i];
-            if(event) {
-                const qty = parseFloat(event['Quantity'] || '0');
-                const qtyDisplay = qty > 0 ? `+${event['Quantity']}` : event['Quantity'];
-                row[`Event Type ${i+1}`] = event['Event Type'] || '-';
-                row[`Quantity ${i+1}`] = qtyDisplay;
-                row[`Event Date ${i+1}`] = formatDate(event['Date'] || event['Date and Time']);
-                row[`Reference ID ${i+1}`] = event['Reference ID'] || '-';
-            } else {
-                row[`Event Type ${i+1}`] = '-';
-                row[`Quantity ${i+1}`] = '-';
-                row[`Event Date ${i+1}`] = '-';
-                row[`Reference ID ${i+1}`] = '-';
-            }
-        }
-        
-        // ===== FIXED: Find matching removal order by CLOSEST DATE =====
-        let removalMatch = null;
-        let closestDateDiff = Infinity;
-        
-        if(merchantSku && merchantSku !== '-' && returnDateObj) {
-            // Find ALL matching removal orders
-            const matchingOrders = removalOrderData.filter(ro => {
-                const roSku = ro['sku']?.toString().trim() || '';
-                const roFnsku = ro['fnsku']?.toString().trim() || '';
-                const normalizedSku = normalizeMerchantSku(roSku);
-                const normalizedMsku = normalizeMerchantSku(merchantSku);
-                return roSku === merchantSku || normalizedSku === normalizedMsku || roFnsku === matchFnsku;
-            });
+        for(const baseRow of storedRemovalsBaseData) {
+            const returnDateDisplay = baseRow['Return Date'] || '-';
+            const orderId = baseRow['Order ID'] || '-';
+            const asin = baseRow['ASIN'] || '-';
+            const fnsku = baseRow['FNSKU'] || '-';
+            const gradeChangedFnsku = baseRow['Grade Changed FNSKU'] || '-';
+            const merchantSku = baseRow['Merchant SKU'] || '-';
+            const detailedDisposition = baseRow['Detailed Disposition'] || '-';
             
-            // Find the one with closest request date to return date
-            for(const order of matchingOrders) {
-                const requestDateStr = order['request-date'];
-                if(requestDateStr) {
-                    const requestDate = new Date(requestDateStr);
-                    if(!isNaN(requestDate.getTime())) {
-                        const dateDiff = Math.abs(requestDate - returnDateObj);
-                        if(dateDiff < closestDateDiff) {
-                            closestDateDiff = dateDiff;
-                            removalMatch = order;
+            const matchFnsku = (gradeChangedFnsku && gradeChangedFnsku !== '-') ? gradeChangedFnsku : fnsku;
+            const returnDateObj = getCleanReturnDate(returnDateDisplay);
+            
+            // Find matching inventory entries
+            let inventoryEntries = [];
+            const key1 = `${matchFnsku}|${asin}`;
+            const key2 = `${merchantSku}|${asin}`;
+            
+            let matches = inventoryByKey.get(key1) || [];
+            if(matches.length === 0 && merchantSku !== '-') {
+                matches = inventoryByKey.get(key2) || [];
+            }
+            
+            if(matches.length > 0 && returnDateObj) {
+                const entriesWithDistance = matches.map(inv => {
+                    const invDate = new Date(inv['Date'] || inv['Date and Time'] || 0);
+                    const distance = Math.abs(invDate - returnDateObj);
+                    return { inv, invDate, distance };
+                });
+                entriesWithDistance.sort((a, b) => a.distance - b.distance);
+                const closestDate = entriesWithDistance[0].invDate;
+                inventoryEntries = matches.filter(inv => {
+                    const invDate = new Date(inv['Date'] || inv['Date and Time'] || 0);
+                    return invDate.toDateString() === closestDate.toDateString();
+                });
+            } else if(matches.length > 0) {
+                inventoryEntries = matches;
+            }
+            
+            // Filter by selected event types (only the 4 types: Adjustments, VendorReturns, CustomerReturns, Whsetransfers)
+            inventoryEntries = inventoryEntries.filter(inv => selectedEventTypes.includes(inv['Event Type']));
+            
+            // Create base row with ALL builder data
+            const row = {
+                'Return Date': returnDateDisplay,
+                'Order ID': orderId,
+                'ASIN': asin,
+                'FNSKU': fnsku,
+                'Grade Changed FNSKU': gradeChangedFnsku,
+                'Merchant SKU': merchantSku,
+                'Detailed Disposition': detailedDisposition,
+                'Grade Unit Status': baseRow['Grade Unit Status'] || '-',
+                'Grade Condition': baseRow['Grade Condition'] || '-',
+                'Reimbursement ID': baseRow['Reimbursement ID'] || '-',
+                'Repo Transaction Type': baseRow['Repo Transaction Type'] || '-',
+                'Repo Transaction Date': baseRow['Repo Transaction Date'] || '-',
+                'Recon Return Status': baseRow['Recon Return Status'] || '-',
+                'Recon Days In-transit': baseRow['Recon Days In-transit'] || '-',
+                'Has Refund in Repo?': baseRow['Has Refund in Repo?'] || '-',
+                'Has Reimbursement?': baseRow['Has Reimbursement?'] || '-',
+                'In FBA Returns?': baseRow['In FBA Returns?'] || '-',
+                'In Grade & Resell?': baseRow['In Grade & Resell?'] || '-',
+                'In Returns Reconciliation?': baseRow['In Returns Reconciliation?'] || '-',
+                'Status': baseRow['Status'] || '-'
+            };
+            
+            // Add inventory event columns (only showing filtered event types)
+            for(let i = 0; i < MAX_EVENTS; i++) {
+                const event = inventoryEntries[i];
+                if(event) {
+                    const qty = parseFloat(event['Quantity'] || '0');
+                    const qtyDisplay = qty > 0 ? `+${event['Quantity']}` : event['Quantity'];
+                    row[`Event Type ${i+1}`] = event['Event Type'] || '-';
+                    row[`Quantity ${i+1}`] = qtyDisplay;
+                    row[`Event Date ${i+1}`] = formatDate(event['Date'] || event['Date and Time']);
+                    row[`Reference ID ${i+1}`] = event['Reference ID'] || '-';
+                } else {
+                    row[`Event Type ${i+1}`] = '-';
+                    row[`Quantity ${i+1}`] = '-';
+                    row[`Event Date ${i+1}`] = '-';
+                    row[`Reference ID ${i+1}`] = '-';
+                }
+            }
+            
+            // ===== SCORE-BASED removal order matching =====
+            let bestMatch = null;
+            let bestScore = -1;
+            
+            if(merchantSku && merchantSku !== '-' && returnDateObj) {
+                for(const order of removalOrderData) {
+                    const orderSku = order['sku']?.toString().trim() || '';
+                    const orderFnsku = order['fnsku']?.toString().trim() || '';
+                    const normalizedOrderSku = normalizeMerchantSku(orderSku);
+                    const normalizedMerchantSku = normalizeMerchantSku(merchantSku);
+                    
+                    // Check if matches ANY criteria
+                    const matchesSku = (orderSku === merchantSku) || 
+                                      (normalizedOrderSku === normalizedMerchantSku && normalizedMerchantSku);
+                    const matchesFnsku = (orderFnsku === matchFnsku && matchFnsku !== '-');
+                    
+                    if(matchesSku || matchesFnsku) {
+                        const score = calculateMatchScore(order, returnDateObj, merchantSku, matchFnsku, asin);
+                        if(score > bestScore) {
+                            bestScore = score;
+                            bestMatch = order;
                         }
                     }
                 }
             }
             
-            // If no match by date, still take the first one as fallback
-            if(!removalMatch && matchingOrders.length > 0) {
-                removalMatch = matchingOrders[0];
-            }
-        }
-        
-        if(removalMatch) {
-            row['Removal Order ID'] = removalMatch['order-id'] || '-';
-            row['Order Status'] = removalMatch['order-status'] || '-';
-            row['Removal Last Updated'] = formatDate(removalMatch['last-updated-date']);
-            row['Requested Qty'] = removalMatch['requested-quantity'] || '-';
-            row['Cancelled Qty'] = removalMatch['cancelled-quantity'] || '-';
-            row['Disposed Qty'] = removalMatch['disposed-quantity'] || '-';
-            row['Shipped Qty'] = removalMatch['shipped-quantity'] || '-';
-            row['In Process Qty'] = removalMatch['in-process-quantity'] || '-';
+            const removalMatch = bestMatch;
             
-            // ===== FIXED: Find matching removal shipment by CLOSEST DATE =====
-            const removalOrderId = removalMatch['order-id']?.toString().trim();
-            const matchingShipments = removalShipmentData.filter(rs => {
-                const rsOrderId = rs['order-id']?.toString().trim();
-                return rsOrderId === removalOrderId;
-            });
-            
-            let bestShipment = null;
-            let closestShipmentDateDiff = Infinity;
-            
-            if(matchingShipments.length > 0 && returnDateObj) {
-                for(const shipment of matchingShipments) {
-                    const shipmentDateStr = shipment['shipment-date'];
-                    if(shipmentDateStr) {
-                        const shipmentDate = new Date(shipmentDateStr);
-                        if(!isNaN(shipmentDate.getTime())) {
-                            const dateDiff = Math.abs(shipmentDate - returnDateObj);
-                            if(dateDiff < closestShipmentDateDiff) {
-                                closestShipmentDateDiff = dateDiff;
+            if(removalMatch) {
+                row['Removal Order ID'] = removalMatch['order-id'] || '-';
+                row['Order Status'] = removalMatch['order-status'] || '-';
+                row['Removal Last Updated'] = formatDate(removalMatch['last-updated-date']);
+                row['Requested Qty'] = removalMatch['requested-quantity'] || '-';
+                row['Cancelled Qty'] = removalMatch['cancelled-quantity'] || '-';
+                row['Disposed Qty'] = removalMatch['disposed-quantity'] || '-';
+                row['Shipped Qty'] = removalMatch['shipped-quantity'] || '-';
+                row['In Process Qty'] = removalMatch['in-process-quantity'] || '-';
+                
+                // Find matching shipment using the matched removal order ID
+                const removalOrderId = removalMatch['order-id']?.toString().trim();
+                const matchingShipments = removalShipmentData.filter(rs => {
+                    const rsOrderId = rs['order-id']?.toString().trim();
+                    return rsOrderId === removalOrderId;
+                });
+                
+                if(matchingShipments.length > 0) {
+                    // Pick shipment with closest date to return date
+                    let bestShipment = matchingShipments[0];
+                    let bestShipmentDiff = Infinity;
+                    
+                    for(const shipment of matchingShipments) {
+                        const shipmentDate = new Date(shipment['shipment-date']);
+                        if(returnDateObj && !isNaN(shipmentDate.getTime())) {
+                            const diff = Math.abs(shipmentDate - returnDateObj);
+                            if(diff < bestShipmentDiff) {
+                                bestShipmentDiff = diff;
                                 bestShipment = shipment;
                             }
                         }
                     }
+                    
+                    row['Shipment Date'] = formatDate(bestShipment['shipment-date']);
+                    row['Carrier'] = bestShipment['carrier'] || '-';
+                    row['Tracking Number'] = bestShipment['tracking-number'] || '-';
+                } else {
+                    row['Shipment Date'] = '-';
+                    row['Carrier'] = '-';
+                    row['Tracking Number'] = '-';
                 }
-            }
-            
-            // If no date match, take the most recent shipment
-            if(!bestShipment && matchingShipments.length > 0) {
-                matchingShipments.sort((a, b) => {
-                    const dateA = new Date(a['shipment-date'] || 0);
-                    const dateB = new Date(b['shipment-date'] || 0);
-                    return dateB - dateA;
-                });
-                bestShipment = matchingShipments[0];
-            }
-            
-            if(bestShipment) {
-                row['Shipment Date'] = formatDate(bestShipment['shipment-date']);
-                row['Carrier'] = bestShipment['carrier'] || '-';
-                row['Tracking Number'] = bestShipment['tracking-number'] || '-';
             } else {
+                row['Removal Order ID'] = '-';
+                row['Order Status'] = '-';
+                row['Removal Last Updated'] = '-';
+                row['Requested Qty'] = '-';
+                row['Cancelled Qty'] = '-';
+                row['Disposed Qty'] = '-';
+                row['Shipped Qty'] = '-';
+                row['In Process Qty'] = '-';
                 row['Shipment Date'] = '-';
                 row['Carrier'] = '-';
                 row['Tracking Number'] = '-';
             }
-        } else {
-            row['Removal Order ID'] = '-';
-            row['Order Status'] = '-';
-            row['Removal Last Updated'] = '-';
-            row['Requested Qty'] = '-';
-            row['Cancelled Qty'] = '-';
-            row['Disposed Qty'] = '-';
-            row['Shipped Qty'] = '-';
-            row['In Process Qty'] = '-';
-            row['Shipment Date'] = '-';
-            row['Carrier'] = '-';
-            row['Tracking Number'] = '-';
+            
+            if(searchTerm && !Object.values(row).some(v => v && v.toString().toLowerCase().includes(searchTerm))) continue;
+            results.push(row);
         }
         
-        if(searchTerm && !Object.values(row).some(v => v && v.toString().toLowerCase().includes(searchTerm))) continue;
-        results.push(row);
+        return results;
     }
-    
-    return results;
-}
+
+    // Drag and Drop for Removals Columns
+    function handleColumnDragStart(e, index) {
+        dragStartIndex = index;
+        e.dataTransfer.effectAllowed = 'move';
+        e.target.style.opacity = '0.5';
+    }
+
+    function handleColumnDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    }
+
+    function handleColumnDragEnd(e) {
+        e.target.style.opacity = '';
+        dragStartIndex = null;
+    }
+
+    function handleColumnDrop(e, targetIndex) {
+        e.preventDefault();
+        if(dragStartIndex === null) return;
+        
+        const draggedCol = removalsColumnOrder[dragStartIndex];
+        removalsColumnOrder.splice(dragStartIndex, 1);
+        removalsColumnOrder.splice(targetIndex, 0, draggedCol);
+        
+        saveRemovalsColumnOrder();
+        renderRemovalsTable();
+        e.target.style.opacity = '';
+        dragStartIndex = null;
+    }
 
     // Render Functions
     function renderBuilderTable() {
@@ -1137,7 +1187,7 @@ function generateRemovalsReport() {
             return;
         }
         
-        let html = `<div style="overflow-x:auto;"><table id="builderTable"><thead></tr>`;
+        let html = `<div style="overflow-x:auto;"><table id="builderTable"><thead><tr>`;
         for(const col of visibleCols) {
             html += `<th onclick="sortBuilderColumn('${col.replace(/'/g,"\\'")}')">
                 ${col}
@@ -1168,7 +1218,7 @@ function generateRemovalsReport() {
                 else if(col === 'Status') className = 'status-no-refund';
                 tr += `<td${className ? ` class="${className}"` : ''}>${val}</td>`;
             }
-            tr += '</tr>';
+            tr += '</table>';
             tbody.innerHTML += tr;
         }
     }
@@ -1207,18 +1257,20 @@ function generateRemovalsReport() {
             return;
         }
         
-        const visibleCols = removalsDisplayColumns.filter(col => visibleRemovalsColumns[col]);
+        const visibleCols = removalsColumnOrder.filter(col => visibleRemovalsColumns[col]);
         if(visibleCols.length === 0) {
             document.getElementById('removalsResults').innerHTML = '<div style="color:#94a3b8; text-align:center; padding:40px;">All columns hidden. Select columns to display.</div>';
             return;
         }
         
         let html = `<div style="overflow-x:auto;"><table id="removalsTable"><thead><tr>`;
-        for(const col of visibleCols) {
-            html += `<th onclick="sortRemovalsColumn('${col.replace(/'/g,"\\'")}')">
+        for(let i = 0; i < visibleCols.length; i++) {
+            const col = visibleCols[i];
+            html += `<th draggable="true" ondragstart="handleColumnDragStart(event, ${i})" ondragover="handleColumnDragOver(event)" ondragend="handleColumnDragEnd(event)" ondrop="handleColumnDrop(event, ${i})" onclick="sortRemovalsColumn('${col.replace(/'/g,"\\'")}')">
+                <span class="drag-handle">⋮⋮</span>
                 ${col}
                 <span style="font-size:0.6rem;">${removalsSortColumn === col ? (removalsSortDirection === 'asc' ? '↑' : '↓') : ''}</span>
-                <button class="remove-col" onclick="hideRemovalsColumn('${col.replace(/'/g,"\\'")}')">✗</button>
+                <button class="remove-col" onclick="event.stopPropagation(); hideRemovalsColumn('${col.replace(/'/g,"\\'")}')">✗</button>
             </th>`;
         }
         html += `</thead><tbody id="removalsTableBody"></tbody></table></div>`;
@@ -1237,7 +1289,12 @@ function generateRemovalsReport() {
         for(const row of filteredData.slice(0, 5000)) {
             let tr = '<tr>';
             for(const col of visibleCols) {
-                tr += `<td>${row[col] || '-'}</td>`;
+                let val = row[col] || '-';
+                let className = '';
+                if(col === 'Status' && val.includes('REFUNDED NOT REIMBURSED')) className = 'status-refunded-not-reimbursed';
+                else if(col === 'Status' && val.includes('REIMBURSED')) className = 'status-reimbursed';
+                else if(col === 'Status') className = 'status-no-refund';
+                tr += `<td${className ? ` class="${className}"` : ''}>${val}</td>`;
             }
             tr += '</tr>';
             tbody.innerHTML += tr;
@@ -1247,7 +1304,7 @@ function generateRemovalsReport() {
     function sortRemovalsColumn(col) {
         if(removalsSortColumn === col) removalsSortDirection = removalsSortDirection === 'asc' ? 'desc' : 'asc';
         else { removalsSortColumn = col; removalsSortDirection = 'asc'; }
-        const visibleCols = removalsDisplayColumns.filter(col => visibleRemovalsColumns[col]);
+        const visibleCols = removalsColumnOrder.filter(col => visibleRemovalsColumns[col]);
         renderRemovalsTableBody(visibleCols);
     }
 
@@ -1272,36 +1329,36 @@ function generateRemovalsReport() {
     }
 
     async function moveToRemovals() {
-    if(!currentBuilderData.length) { alert("Generate a report first"); return; }
-    // Pass ALL data from builder to removals
-    const removalsData = currentBuilderData.map(row => ({
-        'Return Date': row['Return Date'] || '-',
-        'Order ID': row['Order ID'] || '-',
-        'Merchant SKU': row['Merchant SKU'] || '-',
-        'ASIN': row['ASIN'] || '-',
-        'FNSKU': row['FNSKU'] || '-',
-        'Grade Changed FNSKU': row['Grade Changed FNSKU'] || '-',
-        'Detailed Disposition': row['Detailed Disposition'] || '-',
-        'Reimbursement ID': row['Reimbursement ID'] || '-',
-        'Repo Transaction Type': row['Repo Transaction Type'] || '-',
-        'Repo Transaction Date': row['Repo Transaction Date'] || '-',
-        'Recon Return Status': row['Recon Return Status'] || '-',
-        'Recon Days In-transit': row['Recon Days In-transit'] || '-',
-        'Has Refund in Repo?': row['Has Refund in Repo?'] || '-',
-        'Has Reimbursement?': row['Has Reimbursement?'] || '-',
-        'In FBA Returns?': row['In FBA Returns?'] || '-',
-        'In Grade & Resell?': row['In Grade & Resell?'] || '-',
-        'In Returns Reconciliation?': row['In Returns Reconciliation?'] || '-',
-        'Status': row['Status'] || '-'
-    }));
-    await saveToDB('removalsBaseData', removalsData);
-    storedRemovalsBaseData = removalsData;
-    updateRemovalsDataStatus();
-    alert(`Moved ${removalsData.length} records to Removals.`);
-    renderRemovalsReport();
-}
+        if(!currentBuilderData.length) { alert("Generate a report first"); return; }
+        const removalsData = currentBuilderData.map(row => ({
+            'Return Date': row['Return Date'] || '-',
+            'Order ID': row['Order ID'] || '-',
+            'Merchant SKU': row['Merchant SKU'] || '-',
+            'ASIN': row['ASIN'] || '-',
+            'FNSKU': row['FNSKU'] || '-',
+            'Grade Changed FNSKU': row['Grade Changed FNSKU'] || '-',
+            'Detailed Disposition': row['Detailed Disposition'] || '-',
+            'Grade Unit Status': row['Grade Unit Status'] || '-',
+            'Grade Condition': row['Grade Condition'] || '-',
+            'Reimbursement ID': row['Reimbursement ID'] || '-',
+            'Repo Transaction Type': row['Repo Transaction Type'] || '-',
+            'Repo Transaction Date': row['Repo Transaction Date'] || '-',
+            'Recon Return Status': row['Recon Return Status'] || '-',
+            'Recon Days In-transit': row['Recon Days In-transit'] || '-',
+            'Has Refund in Repo?': row['Has Refund in Repo?'] || '-',
+            'Has Reimbursement?': row['Has Reimbursement?'] || '-',
+            'In FBA Returns?': row['In FBA Returns?'] || '-',
+            'In Grade & Resell?': row['In Grade & Resell?'] || '-',
+            'In Returns Reconciliation?': row['In Returns Reconciliation?'] || '-',
+            'Status': row['Status'] || '-'
+        }));
+        await saveToDB('removalsBaseData', removalsData);
+        storedRemovalsBaseData = removalsData;
+        updateRemovalsDataStatus();
+        alert(`Moved ${removalsData.length} records to Removals.`);
+        renderRemovalsReport();
+    }
 
-    // Export Functions
     function exportBuilderCSV() {
         if(!currentBuilderData.length) { alert("Generate report first"); return; }
         const visibleCols = builderDisplayColumns.filter(col => visibleBuilderColumns[col]);
@@ -1316,7 +1373,7 @@ function generateRemovalsReport() {
 
     function exportRemovalsCSV() {
         if(!currentRemovalsData.length) { alert("Generate report first"); return; }
-        const visibleCols = removalsDisplayColumns.filter(col => visibleRemovalsColumns[col]);
+        const visibleCols = removalsColumnOrder.filter(col => visibleRemovalsColumns[col]);
         const rows = currentRemovalsData.map(row => visibleCols.map(h => `"${String(row[h] || '-').replace(/"/g, '""')}"`).join(','));
         const csv = [visibleCols.join(','), ...rows].join('\n');
         const blob = new Blob([csv], {type: 'text/csv'});
@@ -1380,6 +1437,7 @@ function generateRemovalsReport() {
 
     function buildRemovalsEventFilterPanel() {
         const container = document.getElementById('removalsEventFilterPanel');
+        // Only show the 4 event types (Adjustments, VendorReturns, CustomerReturns, Whsetransfers)
         container.innerHTML = `<div class="event-filter-grid sub-grid">${allEventTypes.map(type => `<label class="sub-checkbox"><input type="checkbox" value="${type}" class="removals-event-filter" ${selectedEventTypes.includes(type) ? 'checked' : ''}> ${type}</label>`).join('')}</div>`;
         document.querySelectorAll('.removals-event-filter').forEach(cb => {
             cb.addEventListener('change', () => {
@@ -1462,9 +1520,11 @@ function generateRemovalsReport() {
         document.getElementById('deselectAllBuilderColsBtn').onclick = deselectAllBuilderColumns;
         document.getElementById('toggleRefundedNotReimbursedBtn').onclick = () => { showRefundedNotReimbursedOnly = !showRefundedNotReimbursedOnly; renderBuilderReport(); };
         document.getElementById('toggleRpobFilterBtn').onclick = toggleRpobFilter;
+        document.getElementById('clearRpobDataBtn').onclick = clearRpobData;
         document.getElementById('updateRemovalsReportBtn').onclick = renderRemovalsReport;
         document.getElementById('clearRemovalsTableBtn').onclick = clearRemovalsTable;
         document.getElementById('exportRemovalsCsvBtn').onclick = exportRemovalsCSV;
+        document.getElementById('resetRemovalsColOrderBtn').onclick = resetRemovalsColumnOrder;
         document.getElementById('adminBtn').onclick = () => switchView('admin');
         
         const clearAllBtn = document.getElementById('clearAllDataBtn');
@@ -1483,6 +1543,7 @@ function generateRemovalsReport() {
         }, 500);
     }
     
+    // Make drag/drop functions global
     window.togglePanel = togglePanel;
     window.toggleBuilderColumn = toggleBuilderColumn;
     window.toggleRemovalsColumn = toggleRemovalsColumn;
@@ -1490,6 +1551,10 @@ function generateRemovalsReport() {
     window.hideRemovalsColumn = hideRemovalsColumn;
     window.sortBuilderColumn = sortBuilderColumn;
     window.sortRemovalsColumn = sortRemovalsColumn;
+    window.handleColumnDragStart = handleColumnDragStart;
+    window.handleColumnDragOver = handleColumnDragOver;
+    window.handleColumnDragEnd = handleColumnDragEnd;
+    window.handleColumnDrop = handleColumnDrop;
 </script>
 </body>
 </html>
