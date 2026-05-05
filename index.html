@@ -1272,22 +1272,34 @@ function generateRemovalsReport() {
     }
 
     async function moveToRemovals() {
-        if(!currentBuilderData.length) { alert("Generate a report first"); return; }
-        const removalsData = currentBuilderData.map(row => ({
-            'Return Date': row['Return Date'] || '-',
-            'Order ID': row['Order ID'] || '-',
-            'Merchant SKU': row['Merchant SKU'] || '-',
-            'ASIN': row['ASIN'] || '-',
-            'FNSKU': row['FNSKU'] || '-',
-            'Grade Changed FNSKU': row['Grade Changed FNSKU'] || '-',
-            'Detailed Disposition': row['Detailed Disposition'] || '-'
-        }));
-        await saveToDB('removalsBaseData', removalsData);
-        storedRemovalsBaseData = removalsData;
-        updateRemovalsDataStatus();
-        alert(`Moved ${removalsData.length} records to Removals.`);
-        renderRemovalsReport();
-    }
+    if(!currentBuilderData.length) { alert("Generate a report first"); return; }
+    // Pass ALL data from builder to removals
+    const removalsData = currentBuilderData.map(row => ({
+        'Return Date': row['Return Date'] || '-',
+        'Order ID': row['Order ID'] || '-',
+        'Merchant SKU': row['Merchant SKU'] || '-',
+        'ASIN': row['ASIN'] || '-',
+        'FNSKU': row['FNSKU'] || '-',
+        'Grade Changed FNSKU': row['Grade Changed FNSKU'] || '-',
+        'Detailed Disposition': row['Detailed Disposition'] || '-',
+        'Reimbursement ID': row['Reimbursement ID'] || '-',
+        'Repo Transaction Type': row['Repo Transaction Type'] || '-',
+        'Repo Transaction Date': row['Repo Transaction Date'] || '-',
+        'Recon Return Status': row['Recon Return Status'] || '-',
+        'Recon Days In-transit': row['Recon Days In-transit'] || '-',
+        'Has Refund in Repo?': row['Has Refund in Repo?'] || '-',
+        'Has Reimbursement?': row['Has Reimbursement?'] || '-',
+        'In FBA Returns?': row['In FBA Returns?'] || '-',
+        'In Grade & Resell?': row['In Grade & Resell?'] || '-',
+        'In Returns Reconciliation?': row['In Returns Reconciliation?'] || '-',
+        'Status': row['Status'] || '-'
+    }));
+    await saveToDB('removalsBaseData', removalsData);
+    storedRemovalsBaseData = removalsData;
+    updateRemovalsDataStatus();
+    alert(`Moved ${removalsData.length} records to Removals.`);
+    renderRemovalsReport();
+}
 
     // Export Functions
     function exportBuilderCSV() {
