@@ -381,7 +381,7 @@
     // ========== USER MANAGEMENT ==========
     let currentUser = null;
     let isAdmin = false;
-    let users = [{ id: 1, email: 'AP', password: 'pandrei', name: 'Admin', role: 'admin' }];
+    let users = [{ id: 1, email: 'AP', password: 'pandrei', name: 'Admin', role: 'admin' }, { id: 2, email: 'rc', password: 'rc', name: 'RC', role: 'user' }];
     
     function saveUsers() { localStorage.setItem('fba_users', JSON.stringify(users)); }
     function loadUsers() { const s = localStorage.getItem('fba_users'); if(s) users = JSON.parse(s); }
