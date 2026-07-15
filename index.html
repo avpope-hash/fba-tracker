@@ -333,11 +333,11 @@
                     <button id="deselectAllBuilderColsBtn" class="btn-secondary">✗ Deselect All Columns</button>
                 </div>
                 <div class="action-buttons">
-                   <button id="generateBuilderReportBtn" class="btn-primary">🔍 Generate Report</button>
-                   <button id="generateMissingRefundReportBtn" class="btn-danger">🚨 Missing Refund Report</button>
-                   <button id="clearBuilderTableBtn" class="btn-warning">🗑️ Clear Table</button>
-                   <button id="moveToRemovalsBtn" class="btn-info">📦 Move to Removals</button>
-                   <button id="exportBuilderCsvBtn" class="btn-success">📎 Export CSV</button>
+                    <button id="generateBuilderReportBtn" class="btn-primary">🔍 Generate Report</button>
+                    <button id="generateMissingRefundReportBtn" class="btn-danger">🚨 Missing Refund Report</button>
+                    <button id="clearBuilderTableBtn" class="btn-warning">🗑️ Clear Table</button>
+                    <button id="moveToRemovalsBtn" class="btn-info">📦 Move to Removals</button>
+                    <button id="exportBuilderCsvBtn" class="btn-success">📎 Export CSV</button>
                 </div>
             </div>
 
@@ -775,127 +775,7 @@
     function setupUploadZone() {
         const zone = document.getElementById('uploadZone');
         const fileInput = document.getElementById('fileInput');
-
-     // Generate Missing Refund Report - Finds Refunds in Reports Repository NOT found in FBA Returns, Grade & Resell, or Reimbursements
-function generateMissingRefundReport() {
-    const repoData = datasets.reportsRepo || [];
-    const returnsData = datasets.fbaReturns || [];
-    const gradeData = datasets.gradeResell || [];
-    const reimbData = datasets.reimbursements || [];
-    
-    // Build sets of Order IDs from each report
-    const returnsOrderIds = new Set();
-    returnsData.forEach(row => {
-        const oid = row['order-id']?.toString().trim();
-        if(oid) returnsOrderIds.add(oid);
-    });
-    
-    const gradeOrderIds = new Set();
-    gradeData.forEach(row => {
-        const oid = row['order-id']?.toString().trim();
-        if(oid) gradeOrderIds.add(oid);
-    });
-    
-    const reimbOrderIds = new Set();
-    reimbData.forEach(row => {
-        const oid = row['amazon-order-id']?.toString().trim();
-        if(oid) reimbOrderIds.add(oid);
-    });
-    
-    // Find all Refund transactions in Reports Repository
-    const refundOrders = [];
-    const processedOrderIds = new Set();
-    
-    repoData.forEach(row => {
-        const transactionType = row['type']?.toString().trim() || '';
-        const orderId = row['order id']?.toString().trim();
         
-        // Check if it's a refund type AND has an Order ID AND not processed yet
-        if(refundTransactionTypes.includes(transactionType) && orderId && !processedOrderIds.has(orderId)) {
-            processedOrderIds.add(orderId);
-            
-            // Check if this Order ID exists in ANY of the three reports
-            const inFbaReturns = returnsOrderIds.has(orderId);
-            const inGradeResell = gradeOrderIds.has(orderId);
-            const inReimbursements = reimbOrderIds.has(orderId);
-            
-            // If NOT found in any of the three reports, add to refund orders list
-            if(!inFbaReturns && !inGradeResell && !inReimbursements) {
-                refundOrders.push({
-                    'Order ID': orderId,
-                    'Transaction Type': transactionType,
-                    'Transaction Date': formatDate(row['date/time'] || ''),
-                    'SKU': row['sku'] || '-',
-                    'ASIN': row['asin'] || '-',
-                    'Description': row['description'] || '-',
-                    'Quantity': row['quantity'] || '-',
-                    'Total': row['total'] || '-',
-                    'In FBA Returns?': 'NO',
-                    'In Grade & Resell?': 'NO',
-                    'In Reimbursements?': 'NO'
-                });
-            }
-        }
-    });
-    
-    // Sort by date (newest first)
-    refundOrders.sort((a, b) => {
-        if(a['Transaction Date'] === '-') return 1;
-        if(b['Transaction Date'] === '-') return -1;
-        const dateA = new Date(a['Transaction Date'].split('-').reverse().join('-'));
-        const dateB = new Date(b['Transaction Date'].split('-').reverse().join('-'));
-        return dateB - dateA;
-    });
-    
-    return refundOrders;
-}
-
-// Render Missing Refund Report
-function renderMissingRefundReport() {
-    const data = generateMissingRefundReport();
-    
-    if(!data || data.length === 0) {
-        document.getElementById('builderResults').innerHTML = '<div style="color:#94a3b8; text-align:center; padding:40px;">✅ No missing refunds found. All refunds in Reports Repository have matching records in FBA Returns, Grade & Resell, or Reimbursements.</div>';
-        return;
-    }
-    
-    // Set current data for export
-    currentBuilderData = data;
-    currentColumns = Object.keys(data[0]);
-    
-    let html = `<div style="margin-bottom:16px; background: #ef4444; padding: 12px; border-radius: 8px; color: white;">
-        <strong>🚨 ${data.length} Refund(s) found in Reports Repository</strong> - NOT found in FBA Returns, Grade & Resell, or Reimbursements.
-        <br><span style="font-size: 0.8rem;">These may need to be raised as cases with Amazon.</span>
-    </div><div style="overflow-x:auto;"><table id="reportTable"><thead><tr>`;
-    
-    for(const col of currentColumns) {
-        html += `<th onclick="sortBuilderColumn('${col.replace(/'/g,"\\'")}')">
-            ${col}
-            <span style="font-size:0.6rem;">${builderSortColumn === col ? (builderSortDirection === 'asc' ? '↑' : '↓') : ''}</span>
-            <input type="text" class="filter-input" data-col="${col.replace(/'/g,"\\'")}" placeholder="Filter..." oninput="filterColumn('${col.replace(/'/g,"\\'")}', this.value)">
-        </th>`;
-    }
-    html += `</thead><tbody id="tableBody"></tbody></table></div>`;
-    
-    document.getElementById('builderResults').innerHTML = html;
-    
-    // Render table body with sorting/filtering
-    let filteredData = [...data];
-    for(const [col, filterVal] of Object.entries(columnFilters)) if(filterVal) filteredData = filteredData.filter(row => (row[col]?.toString().toLowerCase() || '').includes(filterVal.toLowerCase()));
-    if(sortColumn) filteredData.sort((a,b) => { let aVal = a[sortColumn] || '', bVal = b[sortColumn] || ''; return sortDirection === 'asc' ? aVal.toString().localeCompare(bVal.toString()) : -aVal.toString().localeCompare(bVal.toString()); });
-    
-    const tbody = document.getElementById('tableBody');
-    if(!tbody) return;
-    tbody.innerHTML = '';
-    for(const row of filteredData.slice(0, 5000)) {
-        let tr = '<tr>';
-        for(const col of currentColumns) {
-            tr += `<td>${row[col] || '-'}</td>`;
-        }
-        tr += '</tr>';
-        tbody.innerHTML += tr;
-    }
-}   
         zone.onclick = () => fileInput.click();
         zone.ondragover = (e) => { e.preventDefault(); zone.classList.add('drag-over'); };
         zone.ondragleave = () => zone.classList.remove('drag-over');
@@ -1078,6 +958,169 @@ function renderMissingRefundReport() {
                 }
             }
         });
+
+    // ===== ADDED: Generate Missing Refund Report =====
+    // Finds Order IDs in Reports Repository that have BOTH 'Order' AND 'Refund' transactions
+    // but are NOT found in FBA Returns, Grade & Resell, or Reimbursements
+    function generateMissingRefundReport() {
+        const repoData = datasets.reportsRepo || [];
+        const returnsData = datasets.fbaReturns || [];
+        const gradeData = datasets.gradeResell || [];
+        const reimbData = datasets.reimbursements || [];
+        
+        // Build sets of Order IDs from each report
+        const returnsOrderIds = new Set();
+        returnsData.forEach(row => {
+            const oid = row['order-id']?.toString().trim();
+            if(oid) returnsOrderIds.add(oid);
+        });
+        
+        const gradeOrderIds = new Set();
+        gradeData.forEach(row => {
+            const oid = row['order-id']?.toString().trim();
+            if(oid) gradeOrderIds.add(oid);
+        });
+        
+        const reimbOrderIds = new Set();
+        reimbData.forEach(row => {
+            const oid = row['amazon-order-id']?.toString().trim();
+            if(oid) reimbOrderIds.add(oid);
+        });
+        
+        // Group transactions by Order ID from Reports Repository
+        const orderTransactions = new Map();
+        repoData.forEach(row => {
+            const orderId = row['order id']?.toString().trim();
+            const transactionType = row['type']?.toString().trim() || '';
+            if(orderId) {
+                if(!orderTransactions.has(orderId)) {
+                    orderTransactions.set(orderId, new Set());
+                }
+                orderTransactions.get(orderId).add(transactionType);
+            }
+        });
+        
+        // Find Order IDs that have BOTH 'Order' AND any Refund type
+        // AND are NOT found in FBA Returns, Grade & Resell, or Reimbursements
+        const missingRefundOrders = [];
+        for(const [orderId, transactionTypes] of orderTransactions) {
+            const hasOrder = transactionTypes.has('Order');
+            const hasRefund = refundTransactionTypes.some(type => transactionTypes.has(type));
+            
+            // Check if NOT found in any of the three reports
+            const inFbaReturns = returnsOrderIds.has(orderId);
+            const inGradeResell = gradeOrderIds.has(orderId);
+            const inReimbursements = reimbOrderIds.has(orderId);
+            
+            // If has both Order AND Refund, AND not found in any report
+            if(hasOrder && hasRefund && !inFbaReturns && !inGradeResell && !inReimbursements) {
+                // Get additional details from the first refund transaction for this order
+                let transactionDate = '-';
+                let sku = '-';
+                let asin = '-';
+                let description = '-';
+                let quantity = '-';
+                let total = '-';
+                
+                // Find the refund transaction to get details
+                for(const row of repoData) {
+                    const oid = row['order id']?.toString().trim();
+                    if(oid === orderId && refundTransactionTypes.includes(row['type']?.toString().trim() || '')) {
+                        transactionDate = formatDate(row['date/time'] || '');
+                        sku = row['sku'] || '-';
+                        asin = row['asin'] || '-';
+                        description = row['description'] || '-';
+                        quantity = row['quantity'] || '-';
+                        total = row['total'] || '-';
+                        break;
+                    }
+                }
+                
+                missingRefundOrders.push({
+                    'Order ID': orderId,
+                    'Transaction Date': transactionDate,
+                    'SKU': sku,
+                    'ASIN': asin,
+                    'Description': description,
+                    'Quantity': quantity,
+                    'Total': total,
+                    'Has Order Transaction': 'YES',
+                    'Has Refund Transaction': 'YES',
+                    'Transaction Types': Array.from(transactionTypes).join(', '),
+                    'In FBA Returns?': 'NO',
+                    'In Grade & Resell?': 'NO',
+                    'In Reimbursements?': 'NO'
+                });
+            }
+        }
+        
+        // Sort by Order ID
+        missingRefundOrders.sort((a, b) => a['Order ID'].localeCompare(b['Order ID']));
+        
+        return missingRefundOrders;
+    }
+
+    // ===== ADDED: Render Missing Refund Report =====
+    function renderMissingRefundReport() {
+        const data = generateMissingRefundReport();
+        
+        if(!data || data.length === 0) {
+            document.getElementById('builderResults').innerHTML = `
+                <div style="color:#94a3b8; text-align:center; padding:40px; background: #10b98120; border-radius: 12px; border: 1px solid #10b981;">
+                    <div style="font-size: 3rem; margin-bottom: 16px;">✅</div>
+                    <div style="font-size: 1.2rem; color: #10b981; font-weight: 600;">No Missing Refunds Found</div>
+                    <div style="margin-top: 8px;">All refunds in Reports Repository have matching records in FBA Returns, Grade & Resell, or Reimbursements.</div>
+                </div>
+            `;
+            currentBuilderData = [];
+            return;
+        }
+        
+        // Set current data for export
+        currentBuilderData = data;
+        currentColumns = Object.keys(data[0]);
+        columnFilters = {};
+        sortColumn = null;
+        sortDirection = 'asc';
+        
+        let html = `
+            <div style="margin-bottom:16px; background: #ef4444; padding: 12px; border-radius: 8px; color: white;">
+                <strong>🚨 ${data.length} Missing Refund(s) found</strong> - These orders have BOTH 'Order' AND 'Refund' transactions in Reports Repository,
+                <br>but are NOT found in FBA Returns, Grade & Resell, or Reimbursements.
+                <br><span style="font-size: 0.8rem;">These should be raised as cases with Amazon.</span>
+            </div>
+            <div style="overflow-x:auto;"><table id="reportTable"><thead><tr>
+        `;
+        
+        for(const col of currentColumns) {
+            html += `<th onclick="sortBuilderColumn('${col.replace(/'/g,"\\'")}')">
+                ${col}
+                <span style="font-size:0.6rem;">${sortColumn === col ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</span>
+                <input type="text" class="filter-input" data-col="${col.replace(/'/g,"\\'")}" placeholder="Filter..." oninput="filterColumn('${col.replace(/'/g,"\\'")}', this.value)">
+            </th>`;
+        }
+        html += `</thead><tbody id="tableBody"></tbody></table></div>`;
+        
+        document.getElementById('builderResults').innerHTML = html;
+        
+        // Render table body with sorting/filtering
+        let filteredData = [...data];
+        for(const [col, filterVal] of Object.entries(columnFilters)) if(filterVal) filteredData = filteredData.filter(row => (row[col]?.toString().toLowerCase() || '').includes(filterVal.toLowerCase()));
+        if(sortColumn) filteredData.sort((a,b) => { let aVal = a[sortColumn] || '', bVal = b[sortColumn] || ''; return sortDirection === 'asc' ? aVal.toString().localeCompare(bVal.toString()) : -aVal.toString().localeCompare(bVal.toString()); });
+        
+        const tbody = document.getElementById('tableBody');
+        if(!tbody) return;
+        tbody.innerHTML = '';
+        for(const row of filteredData.slice(0, 5000)) {
+            let tr = '<tr>';
+            for(const col of currentColumns) {
+                tr += `<td>${row[col] || '-'}</td>`;
+            }
+            tr += '</tr>';
+            tbody.innerHTML += tr;
+        }
+    }
+    // ===== END ADDED =====
         
         for(const [key, entries] of inventoryByKey.entries()) {
             entries.sort((a, b) => {
@@ -1634,8 +1677,8 @@ function renderMissingRefundReport() {
         await initIndexedDB();
         
         document.getElementById('generateBuilderReportBtn').onclick = renderBuilderReport;
-        document.getElementById('clearBuilderTableBtn').onclick = clearBuilderTable;
         document.getElementById('generateMissingRefundReportBtn').onclick = renderMissingRefundReport;
+        document.getElementById('clearBuilderTableBtn').onclick = clearBuilderTable;
         document.getElementById('moveToRemovalsBtn').onclick = moveToRemovals;
         document.getElementById('exportBuilderCsvBtn').onclick = exportBuilderCSV;
         document.getElementById('selectAllBuilderColsBtn').onclick = selectAllBuilderColumns;
@@ -1679,4 +1722,4 @@ function renderMissingRefundReport() {
     window.handleColumnDrop = handleColumnDrop;
 </script>
 </body>
-</html>
+</html> and the document.getElementById('generateMissingRefundReportBtn').onclick = renderMissingRefundReport;
