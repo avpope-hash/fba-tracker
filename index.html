@@ -251,6 +251,7 @@
         .status-refunded-not-reimbursed { background: #ef4444; color: white; display: inline-block; padding: 2px 8px; border-radius: 20px; }
         .status-reimbursed { background: #10b981; color: white; display: inline-block; padding: 2px 8px; border-radius: 20px; }
         .status-no-refund { background: #f59e0b; color: #0f172a; display: inline-block; padding: 2px 8px; border-radius: 20px; }
+        .status-check-order { background: #8b5cf6; color: white; display: inline-block; padding: 2px 8px; border-radius: 20px; }
         
         .data-status {
             background: #1e293b;
@@ -931,34 +932,6 @@
         return results;
     }
 
-    // Generate Removals Report with SCORE-BASED matching
-    function generateRemovalsReport() {
-        if(storedRemovalsBaseData.length === 0) return [];
-        
-        const inventoryData = datasets.inventoryLedger || [];
-        const removalOrderData = datasets.removalOrder || [];
-        const removalShipmentData = datasets.removalShipment || [];
-        const searchTerm = document.getElementById('removalsGlobalSearch')?.value.toLowerCase() || '';
-        
-        // Build inventory lookup by FNSKU + ASIN + MSKU
-        const inventoryByKey = new Map();
-        inventoryData.forEach(inv => {
-            const fnsku = inv['FNSKU']?.toString().trim() || '';
-            const asin = inv['ASIN']?.toString().trim() || '';
-            const msku = inv['MSKU']?.toString().trim() || '';
-            if(fnsku && asin) {
-                const key = `${fnsku}|${asin}`;
-                if(!inventoryByKey.has(key)) inventoryByKey.set(key, []);
-                inventoryByKey.get(key).push(inv);
-                
-                if(msku) {
-                    const mskuKey = `${msku}|${asin}`;
-                    if(!inventoryByKey.has(mskuKey)) inventoryByKey.set(mskuKey, []);
-                    inventoryByKey.get(mskuKey).push(inv);
-                }
-            }
-        });
-
     // ===== ADDED: Generate Missing Refund Report =====
     // Finds Order IDs in Reports Repository that have BOTH 'Order' AND 'Refund' transactions
     // but are NOT found in FBA Returns, Grade & Resell, or Reimbursements
@@ -1049,7 +1022,8 @@
                     'Transaction Types': Array.from(transactionTypes).join(', '),
                     'In FBA Returns?': 'NO',
                     'In Grade & Resell?': 'NO',
-                    'In Reimbursements?': 'NO'
+                    'In Reimbursements?': 'NO',
+                    'Status': '🔍 CHECK ORDER'
                 });
             }
         }
@@ -1114,13 +1088,46 @@
         for(const row of filteredData.slice(0, 5000)) {
             let tr = '<tr>';
             for(const col of currentColumns) {
-                tr += `<td>${row[col] || '-'}</td>`;
+                let val = row[col] || '-';
+                let className = '';
+                if(col === 'Status' && val.includes('CHECK ORDER')) {
+                    className = 'status-check-order';
+                }
+                tr += `<td${className ? ` class="${className}"` : ''}>${val}</td>`;
             }
             tr += '</tr>';
             tbody.innerHTML += tr;
         }
     }
     // ===== END ADDED =====
+
+    // Generate Removals Report with SCORE-BASED matching
+    function generateRemovalsReport() {
+        if(storedRemovalsBaseData.length === 0) return [];
+        
+        const inventoryData = datasets.inventoryLedger || [];
+        const removalOrderData = datasets.removalOrder || [];
+        const removalShipmentData = datasets.removalShipment || [];
+        const searchTerm = document.getElementById('removalsGlobalSearch')?.value.toLowerCase() || '';
+        
+        // Build inventory lookup by FNSKU + ASIN + MSKU
+        const inventoryByKey = new Map();
+        inventoryData.forEach(inv => {
+            const fnsku = inv['FNSKU']?.toString().trim() || '';
+            const asin = inv['ASIN']?.toString().trim() || '';
+            const msku = inv['MSKU']?.toString().trim() || '';
+            if(fnsku && asin) {
+                const key = `${fnsku}|${asin}`;
+                if(!inventoryByKey.has(key)) inventoryByKey.set(key, []);
+                inventoryByKey.get(key).push(inv);
+                
+                if(msku) {
+                    const mskuKey = `${msku}|${asin}`;
+                    if(!inventoryByKey.has(mskuKey)) inventoryByKey.set(mskuKey, []);
+                    inventoryByKey.get(mskuKey).push(inv);
+                }
+            }
+        });
         
         for(const [key, entries] of inventoryByKey.entries()) {
             entries.sort((a, b) => {
@@ -1379,10 +1386,11 @@
                 let className = '';
                 if(col === 'Status' && val.includes('REFUNDED NOT REIMBURSED')) className = 'status-refunded-not-reimbursed';
                 else if(col === 'Status' && val.includes('REIMBURSED')) className = 'status-reimbursed';
-                else if(col === 'Status') className = 'status-no-refund';
+                else if(col === 'Status' && val.includes('NO REFUND')) className = 'status-no-refund';
+                else if(col === 'Status' && val.includes('CHECK ORDER')) className = 'status-check-order';
                 tr += `<td${className ? ` class="${className}"` : ''}>${val}</td>`;
             }
-            tr += '</table>';
+            tr += '</tr>';
             tbody.innerHTML += tr;
         }
     }
@@ -1457,7 +1465,8 @@
                 let className = '';
                 if(col === 'Status' && val.includes('REFUNDED NOT REIMBURSED')) className = 'status-refunded-not-reimbursed';
                 else if(col === 'Status' && val.includes('REIMBURSED')) className = 'status-reimbursed';
-                else if(col === 'Status') className = 'status-no-refund';
+                else if(col === 'Status' && val.includes('NO REFUND')) className = 'status-no-refund';
+                else if(col === 'Status' && val.includes('CHECK ORDER')) className = 'status-check-order';
                 tr += `<td${className ? ` class="${className}"` : ''}>${val}</td>`;
             }
             tr += '</tr>';
@@ -1525,7 +1534,7 @@
 
     function exportBuilderCSV() {
         if(!currentBuilderData.length) { alert("Generate report first"); return; }
-        const visibleCols = builderDisplayColumns.filter(col => visibleBuilderColumns[col]);
+        const visibleCols = Object.keys(currentBuilderData[0]).filter(col => col !== '');
         const rows = currentBuilderData.map(row => visibleCols.map(h => `"${String(row[h] || '-').replace(/"/g, '""')}"`).join(','));
         const csv = [visibleCols.join(','), ...rows].join('\n');
         const blob = new Blob([csv], {type: 'text/csv'});
@@ -1722,4 +1731,4 @@
     window.handleColumnDrop = handleColumnDrop;
 </script>
 </body>
-</html> and the document.getElementById('generateMissingRefundReportBtn').onclick = renderMissingRefundReport;
+</html>
