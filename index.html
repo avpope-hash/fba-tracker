@@ -108,6 +108,7 @@
         .badge-mfn { background: #3b82f6; color: white; padding: 2px 10px; border-radius: 20px; display: inline-block; font-weight: 600; }
         .badge-refunded { background: #10b981; color: white; padding: 2px 10px; border-radius: 20px; display: inline-block; font-weight: 600; }
         .badge-deferred { background: #f59e0b; color: #0f172a; padding: 2px 10px; border-radius: 20px; display: inline-block; font-weight: 600; }
+        .badge-mfn-refund { background: #8b5cf6; color: white; padding: 2px 10px; border-radius: 20px; display: inline-block; font-weight: 600; }
 
         .admin-panel { background: #1e293b; border-radius: 24px; padding: 20px; margin-top: 20px; border: 1px solid #334155; }
         .admin-panel h3, .admin-panel h4 { color: #f59e0b; margin-bottom: 12px; }
@@ -414,8 +415,8 @@
     }
 
     // ========== BUILDER REPORT ==========
-    // Final columns (fixed): Order ID, Refund Date, STATUS
-    const FINAL_COLUMNS = ['Order ID', 'Refund Date', 'STATUS'];
+    // Final columns (fixed): Order ID, Refund Date, Refund Amount, STATUS
+    const FINAL_COLUMNS = ['Order ID', 'Refund Date', 'Refund Amount', 'STATUS'];
 
     function generateBuilderReport() {
         const returnsData = datasets.fbaReturns || [];
@@ -444,8 +445,8 @@
         });
 
         // --- Reports Repository: refund transactions grouped by order id ---
-        // Capture refund date AND whether the Transaction status is "Deferred".
-        const repoRefundByOrder = new Map(); // orderId -> { refundDate, deferred }
+        // Capture refund date, refund amount, AND whether the Transaction status is "Deferred".
+        const repoRefundByOrder = new Map(); // orderId -> { refundDate, refundAmount, deferred }
         for (const row of repoData) {
             const oid = row['order id']?.toString().trim();
             const tType = (row['type'] || '').toString().trim();
@@ -458,6 +459,7 @@
             if (!repoRefundByOrder.has(oid)) {
                 repoRefundByOrder.set(oid, {
                     refundDate: row['Transaction Release Date'] || '',
+                    refundAmount: row['total'] || '',
                     deferred: isDeferred
                 });
             } else {
@@ -485,7 +487,7 @@
 
             let status;
             if (mfnIds.has(oid)) {
-                status = 'MFN';
+                status = 'MFN Refund';
             } else if (info.deferred) {
                 status = 'Deferred';
             } else {
@@ -495,6 +497,7 @@
             results.push({
                 'Order ID': oid,
                 'Refund Date': info.refundDate ? formatDate(info.refundDate) : '-',
+                'Refund Amount': info.refundAmount || '-',
                 'STATUS': status
             });
         }
@@ -505,10 +508,12 @@
             emitted.add(oid);
 
             const repoInfo = repoRefundByOrder.get(oid);
+            const hasRefund = !!repoInfo;
             results.push({
                 'Order ID': oid,
                 'Refund Date': repoInfo && repoInfo.refundDate ? formatDate(repoInfo.refundDate) : '-',
-                'STATUS': 'MFN'
+                'Refund Amount': repoInfo && repoInfo.refundAmount ? repoInfo.refundAmount : '-',
+                'STATUS': hasRefund ? 'MFN Refund' : 'MFN'
             });
         }
 
@@ -525,6 +530,7 @@
 
     function statusBadgeClass(status) {
         if (status === 'MFN') return 'badge-mfn';
+        if (status === 'MFN Refund') return 'badge-mfn-refund';
         if (status === 'Deferred') return 'badge-deferred';
         if (status === 'Refunded') return 'badge-refunded';
         return '';
